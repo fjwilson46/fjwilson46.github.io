@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resume and Cover Letter Checker | Fred Wilson</title>
+<meta name="description" content="Paste a resume or cover letter and get a plain PASS or FAIL with the reasons. Runs in your browser. Nothing is saved or sent.">
+<style>
+  :root {
+    --bg: #f7f5f0; --surface: #ffffff; --ink: #16243a; --muted: #55627a;
+    --navy: #1f3a5f; --teal: #0f7c82; --gold: #b8862b; --line: #e2ddd2;
+    --pass: #1d7a46; --fail: #b3362b; --warn: #9a6a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1826; --surface: #172436; --ink: #eef2f7; --muted: #a9b6c9;
+            --navy: #9cc0ea; --teal: #4fc3c9; --gold: #e0b35a; --line: #28384f;
+            --pass: #5fd08f; --fail: #ff8a7d; --warn: #f0c060; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 17px/1.6 "Segoe UI", system-ui, -apple-system, Arial, sans-serif; }
+  a { color: var(--teal); }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 0 20px 60px; }
+  header { padding: 40px 0 18px; }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 8px 0 10px; color: var(--navy); }
+  .sub { color: var(--muted); margin: 0 0 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; margin: 14px 0; }
+  label { font-weight: 600; }
+  textarea { width: 100%; min-height: 260px; padding: 14px; border-radius: 10px; border: 1.5px solid var(--line);
+             background: var(--surface); color: var(--ink); font: 15px/1.5 Consolas, "Courier New", monospace; resize: vertical; }
+  button { padding: 11px 20px; border-radius: 8px; border: 0; background: var(--navy); color: var(--bg);
+           font: 600 16px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--navy); border: 1.5px solid var(--navy); }
+  #verdict { font-size: 28px; font-weight: 800; margin: 22px 0 6px; }
+  .PASS { color: var(--pass); } .FAIL { color: var(--fail); }
+  ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
+  li { background: var(--surface); border: 1px solid var(--line); border-left-width: 5px; border-radius: 8px; padding: 10px 14px; font-size: 15.5px; }
+  li.fail { border-left-color: var(--fail); } li.warn { border-left-color: var(--warn); } li.ok { border-left-color: var(--pass); }
+  li b { display: block; }
+  .note { color: var(--muted); font-size: 14.5px; margin-top: 26px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <a href="index.html">Back to Fred Wilson</a>
+  <h1>Resume and Cover Letter Checker</h1>
+  <p class="sub">Paste your text and get a plain PASS or FAIL, with the reasons. It runs in your browser. Nothing is saved or sent anywhere.</p>
+</header>
+
+<div class="row">
+  <label><input type="radio" name="kind" value="cover" checked> Cover letter</label>
+  <label><input type="radio" name="kind" value="resume"> Resume</label>
+</div>
+<textarea id="text" aria-label="Paste your resume or cover letter" placeholder="Paste your resume or cover letter here"></textarea>
+<div class="row">
+  <button id="run">Check it</button>
+  <button id="sample" class="ghost">Load a sample</button>
+</div>
+
+<div id="verdict" role="status"></div>
+<ul id="results"></ul>
+
+<p class="note">This is a simple public version of a checker I built for my own job search. My rule: if a mistake matters, turn it into a check that runs every time. Built by <a href="index.html">Fred Wilson</a>.</p>
+</div>
+
+<script>
+const WEAK = ["responsible for","team player","hard worker","hard working","self starter","self-starter","go getter","go-getter",
+  "detail oriented","detail-oriented","results driven","results-driven","think outside the box","synergy","passionate",
+  "dynamic","guru","ninja","rockstar","seasoned professional","proven track record","utilize","utilized","various","etc."];
+const OPENERS = ["i am writing to express my interest","i am writing to apply","to whom it may concern","please accept this letter"];
+
+function check(text, kind) {
+  const out = [];
+  const lower = text.toLowerCase();
+  const chars = text.trim().length;
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+
+  if (chars === 0) return [{level:"fail", title:"Nothing to check", detail:"Paste your text in the box first."}];
+
+  if (kind === "cover") {
+    if (chars > 2000) out.push({level:"fail", title:"Too long: " + chars.toLocaleString() + " characters", detail:"Keep a cover letter under 2,000 characters. A hiring manager gives it less than a minute."});
+    else out.push({level:"ok", title:"Length is good: " + chars.toLocaleString() + " characters", detail:"Under the 2,000 character limit."});
+    const opener = OPENERS.find(o => lower.includes(o));
+    if (opener) out.push({level:"fail", title:"Generic opening", detail:"Found \"" + opener + "\". Open with the problem the company has and how you solve it."});
+  } else {
+    if (words > 900) out.push({level:"warn", title:"Long resume: about " + words + " words", detail:"Most strong resumes land between 450 and 800 words."});
+    else out.push({level:"ok", title:"Length is reasonable: about " + words + " words", detail:""});
+  }
+
+  const dashes = (text.match(/[—–]/g) || []).length;
+  if (dashes) out.push({level:"warn", title:dashes + " long dash" + (dashes > 1 ? "es" : "") + " found", detail:"Long dashes can turn into odd symbols in some hiring systems. Use a comma, colon, or the word \"to\" in date ranges."});
+
+  const found = WEAK.filter(w => lower.includes(w));
+  if (found.length) out.push({level:"fail", title:"Weak or overused phrases: " + found.length, detail:found.join(", ") + ". Replace each with what you did and the result."});
+  else out.push({level:"ok", title:"No overused phrases found", detail:""});
+
+  const numbers = (text.match(/\$?\d[\d,.]*\s?(%|percent|k\b|million|hours|days|weeks|months|years)?/gi) || []).length;
+  if (numbers < 3) out.push({level:"fail", title:"Not enough proof: " + numbers + " number" + (numbers === 1 ? "" : "s"), detail:"Add results with numbers: dollars, percentages, hours, or team size. Aim for at least three."});
+  else out.push({level:"ok", title:"Proof is present: " + numbers + " numbers", detail:""});
+
+  const bangs = (text.match(/!/g) || []).length;
+  if (bangs) out.push({level:"warn", title:bangs + " exclamation point" + (bangs > 1 ? "s" : ""), detail:"Let the specifics carry the energy. Remove them."});
+
+  const firstPerson = kind === "resume" && /\b(I|my)\b/.test(text.split(/\n/).slice(8).join("\n"));
+  if (firstPerson) out.push({level:"warn", title:"First person in the experience section", detail:"Resume bullets read stronger starting with the action: Built, Led, Cut, Grew."});
+
+  return out;
+}
+
+function run() {
+  const kind = document.querySelector("input[name=kind]:checked").value;
+  const res = check(document.getElementById("text").value, kind);
+  const failed = res.some(r => r.level === "fail");
+  const v = document.getElementById("verdict");
+  v.textContent = failed ? "FAIL" : "PASS";
+  v.className = failed ? "FAIL" : "PASS";
+  const ul = document.getElementById("results");
+  ul.innerHTML = "";
+  res.forEach(r => {
+    const li = document.createElement("li"); li.className = r.level;
+    const b = document.createElement("b"); b.textContent = r.title; li.appendChild(b);
+    if (r.detail) li.appendChild(document.createTextNode(r.detail));
+    ul.appendChild(li);
+  });
+}
+
+document.getElementById("run").addEventListener("click", run);
+document.getElementById("sample").addEventListener("click", () => {
+  document.querySelector("input[value=cover]").checked = true;
+  document.getElementById("text").value =
+"Dear Hiring Team,\n\nI am writing to express my interest in the Operations Manager role. I am a passionate, results-driven team player with a proven track record — and I am excited to apply!\n\nIn my last job I was responsible for various projects and utilized many tools to help the team.\n\nThank you,\nSample Applicant";
+  run();
+});
+</script>
+</body>
+</html>
