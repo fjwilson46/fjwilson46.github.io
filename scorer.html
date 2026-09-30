@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">
+<title>Job Match Scorer | Fred Wilson</title>
+<meta name="description" content="Paste a job posting and a resume. Get a match score out of 100, the missing keywords, and a plan. Runs in your browser. Nothing is saved or sent.">
+<style>
+  :root {
+    --bg: #f7f5f0; --surface: #ffffff; --ink: #16243a; --muted: #55627a;
+    --navy: #1f3a5f; --teal: #0f7c82; --gold: #b8862b; --line: #e2ddd2;
+    --pass: #1d7a46; --fail: #b3362b; --warn: #9a6a00; --track: #ebe6dc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1826; --surface: #172436; --ink: #eef2f7; --muted: #a9b6c9;
+            --navy: #9cc0ea; --teal: #4fc3c9; --gold: #e0b35a; --line: #28384f;
+            --pass: #5fd08f; --fail: #ff8a7d; --warn: #f0c060; --track: #22334a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 17px/1.6 "Segoe UI", system-ui, -apple-system, Arial, sans-serif; }
+  a { color: var(--teal); }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 0 20px 60px; }
+  header { padding: 40px 0 18px; }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 8px 0 10px; color: var(--navy); }
+  h2 { font-size: 20px; color: var(--navy); margin: 28px 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 8px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  label { font-weight: 600; display: block; margin: 12px 0 6px; }
+  .hint { color: var(--muted); font-weight: 400; font-size: 14px; }
+  textarea { width: 100%; min-height: 280px; padding: 14px; border-radius: 10px; border: 1.5px solid var(--line);
+             background: var(--surface); color: var(--ink); font: 14.5px/1.5 Consolas, "Courier New", monospace; resize: vertical; }
+  .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 16px 0; }
+  button { padding: 11px 20px; border-radius: 8px; border: 0; background: var(--navy); color: var(--bg);
+           font: 600 16px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--navy); border: 1.5px solid var(--navy); }
+  #result[hidden] { display: none; }
+  .score { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin: 24px 0 4px; }
+  .score b { font-size: 56px; line-height: 1; color: var(--navy); }
+  .score span { font-size: 22px; font-weight: 700; }
+  .strong { color: var(--pass); } .good { color: var(--teal); } .stretch { color: var(--warn); } .long { color: var(--fail); }
+  .cats { display: grid; gap: 10px; margin-top: 14px; }
+  .cat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .cat .top { display: flex; justify-content: space-between; gap: 10px; font-weight: 600; }
+  .bar { height: 8px; background: var(--track); border-radius: 99px; margin: 8px 0 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--teal); border-radius: 99px; }
+  .cat p { margin: 0; color: var(--muted); font-size: 15px; }
+  ul.list { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
+  ul.list li { background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--warn); border-radius: 8px; padding: 10px 14px; font-size: 15.5px; }
+  ul.list.plan li { border-left-color: var(--teal); }
+  ul.list li b { display: block; }
+  .tag { display: inline-block; background: var(--track); border-radius: 6px; padding: 1px 8px; margin: 3px 4px 0 0; font-size: 14px; }
+  .note { color: var(--muted); font-size: 14.5px; margin-top: 26px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <a href="index.html">Back to Fred Wilson</a>
+  <h1>Job Match Scorer</h1>
+  <p class="sub">Paste a job posting and a resume. Get a match score out of 100, the keywords the resume is missing, and a plan. It runs in your browser. Nothing is saved or sent anywhere.</p>
+</header>
+
+<div class="grid">
+  <div>
+    <label for="posting">Job posting <span class="hint">(put the job title on the first line)</span></label>
+    <textarea id="posting" placeholder="Paste the full job posting here"></textarea>
+  </div>
+  <div>
+    <label for="resume">Resume</label>
+    <textarea id="resume" placeholder="Paste the resume text here"></textarea>
+  </div>
+</div>
+<div class="row">
+  <button id="run">Score it</button>
+  <button id="sample" class="ghost">Load a sample</button>
+</div>
+
+<section id="result" hidden aria-live="polite">
+  <div class="score"><b id="total"></b><span id="verdict"></span></div>
+  <p class="sub" id="verdict-detail"></p>
+  <div class="cats" id="cats"></div>
+  <h2>Gaps</h2>
+  <ul class="list" id="gaps"></ul>
+  <h2>Plan</h2>
+  <ul class="list plan" id="plan"></ul>
+</section>
+
+<p class="note">This is a simple public version of the scorer I built for my own job search. The private version also weighs pay, benefits, and work setup. One rule carries over: a keyword only goes on a resume if it is true. Built by <a href="index.html">Fred Wilson</a>.</p>
+</div>
+
+<script>
+// Skill terms and the ways postings write them. Matching ignores case and punctuation.
+const LEXICON = [
+  ["Operational excellence", ["operational excellence"]],
+  ["Business operations", ["business operations"]],
+  ["Process improvement", ["process improvement", "process improvements", "process optimization", "improve processes", "improving processes"]],
+  ["Continuous improvement", ["continuous improvement"]],
+  ["Program management", ["program management", "program manager", "programs"]],
+  ["Project management", ["project management", "project manager", "project plans"]],
+  ["Portfolio management", ["portfolio management"]],
+  ["Change management", ["change management"]],
+  ["Stakeholder management", ["stakeholder management", "stakeholder engagement", "stakeholders"]],
+  ["Cross functional leadership", ["cross functional", "cross functionally"]],
+  ["Strategic planning", ["strategic planning", "strategy"]],
+  ["Governance", ["governance"]],
+  ["Risk management", ["risk management", "risk mitigation"]],
+  ["Compliance", ["compliance", "regulatory"]],
+  ["Budget management", ["budget", "budgets", "budgeting"]],
+  ["P and L ownership", ["p l", "profit and loss"]],
+  ["Forecasting", ["forecasting", "forecasts", "forecast"]],
+  ["Capacity planning", ["capacity planning", "workforce planning"]],
+  ["Workforce management", ["workforce management"]],
+  ["Vendor management", ["vendor management", "vendor partners", "vendor relationships", "vendors", "outsourced", "outsourcing", "bpo"]],
+  ["Contract negotiation", ["contract negotiation", "negotiate contracts", "negotiating contracts"]],
+  ["Procurement", ["procurement", "purchasing"]],
+  ["Supply chain", ["supply chain"]],
+  ["Logistics", ["logistics", "fulfillment"]],
+  ["Customer experience", ["customer experience", "cx"]],
+  ["Customer support", ["customer support", "customer service", "customer care", "support operations"]],
+  ["Contact center", ["contact center", "call center"]],
+  ["Quality assurance", ["quality assurance", "quality management", "qa"]],
+  ["Customer success", ["customer success"]],
+  ["SLAs", ["sla", "slas", "service level", "service levels"]],
+  ["KPIs", ["kpi", "kpis", "key performance indicators", "metrics"]],
+  ["OKRs", ["okr", "okrs"]],
+  ["Dashboards", ["dashboard", "dashboards"]],
+  ["Executive reporting", ["executive reporting", "reporting"]],
+  ["Data analysis", ["data analysis", "data analytics", "analytics", "analyze data", "analyzing data"]],
+  ["Data driven decisions", ["data driven"]],
+  ["Root cause analysis", ["root cause", "root causes"]],
+  ["SOPs and documentation", ["sop", "sops", "standard operating procedures", "process documentation", "documentation"]],
+  ["Training and enablement", ["training", "enablement", "onboarding"]],
+  ["People management", ["people management", "people leader", "direct reports", "manage a team", "managing a team", "team management", "leading teams", "lead teams", "led teams", "led a team", "lead a team", "leading a team", "managed a team"]],
+  ["Coaching and mentoring", ["coaching", "mentoring", "coach", "mentor"]],
+  ["Performance management", ["performance management"]],
+  ["Hiring", ["hiring", "recruiting", "talent acquisition"]],
+  ["Remote teams", ["remote teams", "distributed teams", "global teams"]],
+  ["Executive communication", ["executive communication", "executive communications", "senior leadership", "c suite", "executive team", "leadership team"]],
+  ["Internal communications", ["internal communications", "change communications"]],
+  ["Agile", ["agile"]],
+  ["Scrum", ["scrum", "scrum master"]],
+  ["SAFe", ["scaled agile", "safe agilist", "safe 5", "safe 6"]],
+  ["Lean Six Sigma", ["lean six sigma", "six sigma", "lean methodology", "lean principles"]],
+  ["PMP", ["pmp", "project management professional"]],
+  ["Automation", ["automation", "automate", "automated", "automating", "workflow automation"]],
+  ["Generative AI", ["generative ai", "genai", "gen ai", "llm", "llms", "large language models", "chatgpt", "claude", "copilot", "ai tools", "artificial intelligence", "ai"]],
+  ["Machine learning", ["machine learning", "ml"]],
+  ["Prompt engineering", ["prompt engineering", "prompts"]],
+  ["Payments", ["payments", "payment processing", "payment gateways", "chargebacks", "refunds", "billing"]],
+  ["E commerce", ["e commerce", "ecommerce", "checkout", "online store"]],
+  ["Subscription business", ["subscription", "subscriptions", "subscribers", "recurring revenue", "mrr"]],
+  ["SaaS", ["saas"]],
+  ["Healthcare", ["healthcare", "health care", "hipaa"]],
+  ["Streaming and media", ["streaming", "media", "entertainment"]],
+  ["Gaming", ["gaming", "video games", "games"]],
+  ["Fintech", ["fintech", "financial services"]],
+  ["Excel", ["excel", "spreadsheets", "google sheets"]],
+  ["SQL", ["sql"]],
+  ["Python", ["python"]],
+  ["Tableau", ["tableau"]],
+  ["Power BI", ["power bi"]],
+  ["Looker", ["looker"]],
+  ["Salesforce", ["salesforce"]],
+  ["Zendesk", ["zendesk"]],
+  ["Jira", ["jira"]],
+  ["Asana", ["asana"]],
+  ["ClickUp", ["clickup"]],
+  ["Confluence", ["confluence"]],
+  ["Smartsheet", ["smartsheet"]],
+  ["Monday.com", ["monday com"]],
+  ["Notion", ["notion"]],
+  ["ServiceNow", ["servicenow"]],
+  ["NetSuite", ["netsuite"]],
+  ["Workday", ["workday"]],
+  ["HubSpot", ["hubspot"]],
+  ["Zapier", ["zapier"]],
+  ["MBA", ["mba", "master of business administration"]],
+  ["Bachelor's degree", ["bachelor", "bachelors", "bachelor s"]]
+];
+
+const LEVELS = [["chief", "Chief"], ["vice president", "VP"], ["vp", "VP"], ["head", "Head"], ["director", "Director"],
+  ["senior manager", "Senior Manager"], ["manager", "Manager"], ["lead", "Lead"], ["principal", "Principal"], ["senior", "Senior"]];
+const TITLE_STOP = new Set(["of", "and", "the", "a", "an", "for", "to", "in", "at", "with", "on", "remote", "hybrid", "us", "usa",
+  "i", "ii", "iii", "iv", "sr", "jr", "senior", "junior", "chief", "vice", "president", "vp", "head", "director", "manager",
+  "lead", "principal", "staff", "associate"]);
+
+const norm = s => " " + s.toLowerCase().replace(/&/g, " ").replace(/[^a-z0-9+#]+/g, " ").replace(/\s+/g, " ").trim() + " ";
+const has = (text, phrase) => text.includes(" " + phrase + " ");
+const countOf = (text, phrase) => text.split(" " + phrase + " ").length - 1;
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const LEX = LEXICON.map(([label, pats]) => [label, pats.map(p => norm(p).trim())]);
+
+function termsIn(text) {
+  const t = norm(text), out = new Map();
+  LEX.forEach(([label, pats]) => {
+    const n = pats.reduce((sum, p) => sum + countOf(t, p), 0);
+    if (n) out.set(label, n);
+  });
+  return out;
+}
+const resumeHas = (resumeNorm, label) => LEX.find(l => l[0] === label)[1].some(p => has(resumeNorm, p));
+
+// Split the posting into required, preferred, and other text using its section headings
+function sections(posting) {
+  const buckets = { required: [], preferred: [], other: [] };
+  let state = "other";
+  posting.split(/\r?\n/).forEach(line => {
+    const t = line.trim();
+    if (!t) return;
+    const h = norm(t).trim();
+    const short = t.length <= 45 && h.split(" ").length <= 6 && !/^[•*\-]/.test(t);
+    if (short && /^(preferred|nice to have|bonus|pluses|desired|ideal|extra credit)/.test(h)) { state = "preferred"; return; }
+    if (short && /^(required|requirements|qualifications|basic qualifications|minimum|must have|what you bring|what you ll need|what we re looking for|who you are|you have|skills|experience)/.test(h)) { state = "required"; return; }
+    if (short && /^(responsibilities|key responsibilities|what you ll do|duties|about|benefits|compensation|salary|pay|perks|the role|your role|our team|why join)/.test(h)) { state = "other"; return; }
+    buckets[state].push(t);
+  });
+  return buckets;
+}
+
+function yearsNeeded(posting) {
+  let need = 0;
+  for (const m of posting.toLowerCase().matchAll(/(\d{1,2})\s*\+?\s*(?:or more\s+|plus\s+)?years?/g)) {
+    const n = +m[1];
+    if (n > 0 && n <= 30) need = Math.max(need, n);
+  }
+  return need;
+}
+
+function yearsShown(resume) {
+  const low = resume.toLowerCase();
+  let have = 0;
+  for (const m of low.matchAll(/(?:more than|over)\s+(\d{1,2})\s+years|(\d{1,2})\s*\+\s*years|(\d{1,2})\s+years/g)) {
+    have = Math.max(have, +(m[1] || m[2] || m[3]));
+  }
+  const now = new Date().getFullYear();
+  const years = [...low.matchAll(/\b(19[7-9]\d|20[0-4]\d)\b/g)].map(m => +m[1]).filter(y => y <= now);
+  if (years.length) have = Math.max(have, Math.max(...years) - Math.min(...years));
+  return have;
+}
+
+function score(posting, resume) {
+  const resumeNorm = norm(resume);
+  const lines = posting.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const title = lines[0] || "";
+  const titleNorm = norm(title);
+  const cats = [], gaps = [], plan = [];
+
+  // 1. Title and level
+  const level = LEVELS.find(([p]) => has(titleNorm, p));
+  const core = titleNorm.trim().split(" ").filter(w => w && !TITLE_STOP.has(w));
+  const coreFound = core.filter(w => has(resumeNorm, w));
+  const exact = has(resumeNorm, titleNorm.trim());
+  const levelOk = !level || has(resumeNorm, level[0]);
+  let titlePts = exact ? 20 : Math.round((core.length ? 14 * coreFound.length / core.length : 14) + (levelOk ? 6 : 0));
+  cats.push({ name: "Title and level", pts: titlePts,
+    why: exact ? "The resume uses the exact job title." :
+      (core.length ? coreFound.length + " of " + core.length + " title words appear in the resume. " : "") +
+      (level ? (levelOk ? "The " + level[1] + " level appears in the resume." : "The " + level[1] + " level does not appear in the resume.") : "No level found in the title.") });
+  if (!exact) plan.push(["Mirror the title", "Put \"" + title + "\" in your resume headline, if it honestly describes your work. Hiring systems weigh an exact title match heavily."]);
+
+  // 2 and 3. Skills
+  const secs = sections(posting);
+  const all = termsIn(posting);
+  const reqLines = secs.required.length ? secs.required : [...secs.other.slice(1), ...secs.required];
+  const req = termsIn(reqLines.join("\n"));
+  const pref = termsIn(secs.preferred.join("\n"));
+  const prefLabels = [...pref.keys()].filter(l => !req.has(l));
+  const prefMissing = prefLabels.filter(l => !resumeHas(resumeNorm, l));
+  const allLabels = [...all.keys()];
+  const allFound = allLabels.filter(l => resumeHas(resumeNorm, l));
+
+  // A line like "Zendesk, Jira, or Asana" is one requirement that any of its skills satisfies
+  const units = [], seen = new Set();
+  reqLines.forEach(line => {
+    const labels = [...termsIn(line).keys()];
+    const groups = labels.length > 1 && /\s(or|either)\s/i.test(" " + line + " ") ? [labels] : labels.map(l => [l]);
+    groups.forEach(g => {
+      const key = g.slice().sort().join("|");
+      if (!seen.has(key) && !(g.length === 1 && seen.has("single:" + g[0]))) {
+        seen.add(key);
+        if (g.length === 1) seen.add("single:" + g[0]);
+        units.push(g);
+      }
+    });
+  });
+  const unitsMissing = units.filter(g => !g.some(l => resumeHas(resumeNorm, l)));
+  const reqMissing = unitsMissing.map(g => g.join(" or "));
+  const reqPct = units.length ? (units.length - unitsMissing.length) / units.length : allLabels.length ? allFound.length / allLabels.length : 0;
+  const allPct = allLabels.length ? allFound.length / allLabels.length : 0;
+  cats.push({ name: "Required skills", pts: Math.round(20 * reqPct),
+    why: units.length ? (units.length - unitsMissing.length) + " of " + units.length + " required skills appear in the resume." +
+      (secs.required.length ? "" : " No requirements heading was found, so the whole posting was used.") : "No known skill terms were found in the requirements." });
+  cats.push({ name: "All posting skills", pts: Math.round(20 * allPct),
+    why: allFound.length + " of " + allLabels.length + " skills mentioned anywhere in the posting appear in the resume." });
+
+  // 4. Years
+  const need = yearsNeeded(posting), have = yearsShown(resume);
+  const yearsPts = need ? Math.round(20 * Math.min(1, have / need)) : 20;
+  cats.push({ name: "Years of experience", pts: yearsPts,
+    why: need ? "The posting asks for " + need + " or more years. The resume shows about " + have + "." : "The posting does not state a years requirement." });
+  if (need && have < need) plan.push(["Address the years gap", "The posting asks for " + need + " years and the resume shows about " + have + ". Lead with the size of what you ran and the results, and let the cover letter speak to it."]);
+
+  // 5. Top of the resume
+  // Of the posting skills the resume has, the most used ones should appear in the first 100 words
+  const top = allFound.slice().sort((a, b) => (all.get(b) + (req.has(b) ? 0.5 : 0)) - (all.get(a) + (req.has(a) ? 0.5 : 0))).slice(0, 8);
+  const first100 = norm(resume.split(/\s+/).slice(0, 100).join(" "));
+  const topFound = top.filter(l => resumeHas(first100, l));
+  const topPts = top.length ? Math.round(20 * topFound.length / top.length) : 0;
+  const topMissing = top.filter(l => !topFound.includes(l));
+  cats.push({ name: "Key terms near the top", pts: topPts,
+    why: top.length ? topFound.length + " of the " + top.length + " posting skills this resume has appear in its first 100 words, which hiring systems read first." : "The resume has none of the posting's skills yet, so there is nothing to move up." });
+  if (topMissing.length) plan.push(["Move key terms up", "These are already in the resume but not in the first 100 words. Work them into your summary: " + topMissing.join(", ") + "."]);
+
+  if (reqMissing.length) {
+    gaps.push(["Required skills not found", reqMissing]);
+    plan.push(["Add only what is true", "If you have done this work, add it with a result: " + reqMissing.join(", ") + ". If you have not, name the gap in your cover letter instead. A keyword you cannot defend costs the interview."]);
+  }
+  if (prefMissing.length) gaps.push(["Preferred skills not found", prefMissing]);
+  plan.push(["Check the final version", "Run your finished resume and cover letter through the <a href=\"checker.html\">Resume and Cover Letter Checker</a> before you send them."]);
+
+  const total = cats.reduce((s, c) => s + c.pts, 0);
+  return { total, cats, gaps, plan, empty: !allLabels.length };
+}
+
+function verdict(total) {
+  if (total >= 80) return ["Strong match", "strong", "Apply, and tailor the summary to the posting."];
+  if (total >= 65) return ["Good match", "good", "Worth applying after you close the gaps below."];
+  if (total >= 50) return ["Stretch", "stretch", "Apply only with a clear reason, a referral, or a strong story for the gaps."];
+  return ["Long shot", "long", "Look for a closer role, or get a referral before you spend time on this one."];
+}
+
+function run() {
+  const posting = document.getElementById("posting").value, resume = document.getElementById("resume").value;
+  const out = document.getElementById("result");
+  if (!posting.trim() || !resume.trim()) {
+    out.hidden = false;
+    document.getElementById("total").textContent = "";
+    document.getElementById("verdict").textContent = "Paste both a job posting and a resume first.";
+    document.getElementById("verdict").className = "long";
+    ["verdict-detail", "cats", "gaps", "plan"].forEach(id => document.getElementById(id).innerHTML = "");
+    return;
+  }
+  const r = score(posting, resume), v = verdict(r.total);
+  document.getElementById("total").textContent = r.total + " / 100";
+  document.getElementById("verdict").textContent = v[0];
+  document.getElementById("verdict").className = v[1];
+  document.getElementById("verdict-detail").textContent = v[2] + (r.empty ? " Few known skill terms were found in this posting, so treat the score as rough." : "");
+  document.getElementById("cats").innerHTML = r.cats.map(c =>
+    "<div class=\"cat\"><div class=\"top\"><span>" + esc(c.name) + "</span><span>" + c.pts + " / 20</span></div>" +
+    "<div class=\"bar\"><i style=\"width:" + (c.pts * 5) + "%\"></i></div><p>" + esc(c.why) + "</p></div>").join("");
+  document.getElementById("gaps").innerHTML = r.gaps.length ? r.gaps.map(([t, list]) =>
+    "<li><b>" + esc(t) + "</b>" + list.map(x => "<span class=\"tag\">" + esc(x) + "</span>").join("") + "</li>").join("") :
+    "<li><b>No skill gaps found</b>Every skill term found in the posting also appears in the resume.</li>";
+  document.getElementById("plan").innerHTML = r.plan.map(([t, d]) => "<li><b>" + esc(t) + "</b>" + (d.includes("<a ") ? d : esc(d)) + "</li>").join("");
+  out.hidden = false;
+  out.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+document.getElementById("run").addEventListener("click", run);
+document.getElementById("sample").addEventListener("click", () => {
+  document.getElementById("posting").value =
+"Director of Business Operations\n" +
+"Sample Company (made up for this demo), Remote\n\n" +
+"About the role\n" +
+"We are a growing subscription streaming service. You will run the operations that keep customers happy and costs in check.\n\n" +
+"What you'll do\n" +
+"• Own operational excellence across customer support, billing, and vendor partners\n" +
+"• Build KPI dashboards and executive reporting for the leadership team\n" +
+"• Lead process improvement and change management with cross functional teams\n" +
+"• Manage outsourced vendor partners against SLAs\n" +
+"• Use automation and AI tools to cut manual work\n\n" +
+"What you bring\n" +
+"• 10+ years in business operations, including 5+ years leading teams\n" +
+"• Program management and governance experience\n" +
+"• Hands on experience with Zendesk, Jira, or Asana\n" +
+"• Experience with payments, chargebacks, and refunds\n" +
+"• Working knowledge of SQL\n\n" +
+"Nice to have\n" +
+"• Background in streaming or media\n" +
+"• Lean Six Sigma or Agile certification\n" +
+"• MBA";
+  document.getElementById("resume").value =
+"Jordan Sample\n" +
+"Senior Manager, Business Operations\n\n" +
+"Operations manager with 8 years of experience in customer support and vendor management. I build dashboards, fix broken processes, and keep teams on track.\n\n" +
+"Experience\n" +
+"Senior Manager, Business Operations, Example Retail Co, 2021 to 2025\n" +
+"• Led a team of 12 in customer support; cut average response time 30%\n" +
+"• Managed three outsourced vendors and their SLAs\n" +
+"• Built KPI dashboards in Excel for the leadership team\n\n" +
+"Operations Manager, Example Logistics, 2017 to 2021\n" +
+"• Ran a process improvement program that cut shipping errors 22%\n" +
+"• Wrote SOPs and trained 40 new hires\n" +
+"• Used Asana to track projects across three departments\n\n" +
+"Education\n" +
+"Bachelor of Science, Business Administration";
+  run();
+});
+</script>
+</body>
+</html>
