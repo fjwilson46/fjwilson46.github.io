@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+  <title>Operations Check Up | Fred Wilson</title>
+  <style>
+    :root { --bg:#f7f5f0; --surface:#ffffff; --ink:#16243a; --muted:#55627a; --navy:#1f3a5f; --teal:#0f7c82; --gold:#b8862b; --line:#e2ddd2; color-scheme:light; }
+    @media (prefers-color-scheme:dark) { :root { --bg:#0f1826; --surface:#172436; --ink:#eef2f7; --muted:#a9b6c9; --navy:#9cc0ea; --teal:#4fc3c9; --gold:#e0b35a; --line:#28384f; color-scheme:dark; } }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.6 "Segoe UI",system-ui,-apple-system,Arial,sans-serif; }
+    main { max-width:820px; margin:0 auto; padding:28px 20px 48px; }
+    a { color:var(--navy); text-underline-offset:4px; }
+    .home { display:inline-block; margin-bottom:28px; }
+    .card { padding:clamp(20px,5vw,40px); border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+    h1,h2,h3,legend { color:var(--navy); line-height:1.25; }
+    h1 { font-size:clamp(2rem,5vw,2.8rem); margin:0 0 20px; }
+    h2 { font-size:1.5rem; margin:0 0 16px; }
+    h3 { font-size:1.1rem; margin:0 0 8px; }
+    p { margin:0 0 20px; }
+    .muted { color:var(--muted); }
+    .privacy { margin:24px 0; }
+    button,.button { display:inline-flex; align-items:center; justify-content:center; min-height:48px; padding:11px 20px; border:1px solid var(--navy); border-radius:8px; background:var(--navy); color:var(--bg); font:inherit; font-weight:600; text-align:center; text-decoration:none; cursor:pointer; overflow-wrap:anywhere; }
+    .secondary { background:transparent; color:var(--navy); }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    :focus-visible { outline:3px solid var(--teal); outline-offset:4px; }
+    [tabindex="-1"]:focus { outline:3px solid var(--teal); outline-offset:5px; }
+    [hidden] { display:none !important; }
+    .progress { color:var(--muted); margin-bottom:20px; }
+    fieldset { padding:0; margin:0; border:0; min-width:0; }
+    legend { padding:0; margin-bottom:24px; font-size:1.4rem; font-weight:700; width:100%; }
+    .choices { display:grid; gap:12px; }
+    .choice { display:flex; align-items:flex-start; gap:12px; padding:14px; border:1px solid var(--line); border-radius:8px; cursor:pointer; }
+    .choice:has(input:checked) { border-color:var(--teal); box-shadow:inset 0 0 0 1px var(--teal); }
+    input[type="radio"] { flex:0 0 auto; width:20px; height:20px; margin:4px 0 0; accent-color:var(--teal); }
+    .actions { display:flex; justify-content:space-between; gap:16px; margin-top:28px; }
+    .score { font-size:2.6rem; font-weight:700; color:var(--navy); margin-bottom:12px; }
+    .score span { font-size:1.1rem; font-weight:400; color:var(--muted); }
+    .areas { display:grid; gap:20px; margin:28px 0 36px; }
+    .area-label { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-bottom:7px; }
+    .area-label strong { font-weight:600; }
+    .bar { height:12px; overflow:hidden; border-radius:6px; background:var(--line); }
+    .bar-fill { height:100%; background:var(--teal); border-radius:6px; }
+    .first-step { border-left:3px solid var(--gold); padding-left:18px; margin:24px 0; }
+    .first-step p { margin:0; }
+    .contact { margin-top:32px; padding-top:28px; border-top:1px solid var(--line); }
+    .contact-links { display:flex; flex-wrap:wrap; gap:12px; }
+    .contact-links .button { flex:1 1 220px; }
+    #restart { margin-top:28px; }
+    @media (max-width:420px) { .card { padding:20px; } .contact-links .button { width:100%; } }
+  </style>
+</head>
+<body>
+<main>
+  <a class="home" href="index.html">Back to Fred Wilson</a>
+  <section id="intro" class="card" aria-labelledby="intro-title">
+    <h1 id="intro-title" tabindex="-1">Operations Check Up</h1>
+    <p>Ten questions. Two minutes. Find out where your business is losing time and money.</p>
+    <p class="muted privacy">It runs in your browser. Nothing is saved or sent anywhere.</p>
+    <button id="start" type="button">Start</button>
+    <noscript><p>Turn on JavaScript in your browser to take the check up.</p></noscript>
+  </section>
+  <section id="questions" class="card" aria-label="Operations Check Up questions" hidden>
+    <p id="progress" class="progress"></p>
+    <fieldset aria-describedby="progress">
+      <legend id="question-title" tabindex="-1"></legend>
+      <div id="choices" class="choices"></div>
+    </fieldset>
+    <div class="actions">
+      <button id="back" class="secondary" type="button">Back</button>
+      <button id="next" type="button" disabled>Next</button>
+    </div>
+  </section>
+  <section id="results" class="card" aria-labelledby="results-title" hidden>
+    <h1 id="results-title" tabindex="-1">Your results</h1>
+    <p class="score"><strong id="total"></strong> <span>out of 30</span></p>
+    <p id="verdict"></p>
+    <div id="areas" class="areas"></div>
+    <h2 id="steps-title">Start here</h2>
+    <div id="steps"></div>
+    <div class="contact">
+      <h2>Want help fixing the first one?</h2>
+      <p>I help growing businesses set up workflows, customer support operations, and AI tools through Tin and Lou Operations Consulting.</p>
+      <div class="contact-links">
+        <a class="button" href="https://www.fiverr.com/tinandlou" rel="noreferrer">See my services on Fiverr</a>
+        <a class="button secondary" href="https://www.linkedin.com/company/tin-and-lou-operations-consulting" rel="noreferrer">Tin and Lou on LinkedIn</a>
+        <a class="button secondary" href="mailto:fjwilson46@gmail.com?subject=Operations%20Check%20Up">Email me</a>
+      </div>
+    </div>
+    <button id="restart" class="secondary" type="button">Start over</button>
+  </section>
+</main>
+<script>
+  'use strict';
+  const questions = [
+    ['When a new request or task comes in, where does it go?', ['Wherever it lands: email, text, or a conversation', 'Mostly email, and I keep track in my head', 'A shared list or spreadsheet', 'One system where every request has an owner and a due date']],
+    ['How often does work get finished late?', ['Most of the time', 'About half the time', 'Now and then', 'Rarely']],
+    ['If you were out for a week, could someone else see what is in progress?', ['No, it is all in my head', 'They could piece it together from emails', 'Mostly, with some gaps', 'Yes, it is all visible in one place']],
+    ['How do customer questions reach you?', ['Any way they like, and I lose some', 'One inbox that everyone shares', 'One inbox with folders or labels', 'A support tool that routes each question to the right person']],
+    ['How long does a customer usually wait for a first reply?', ['I do not know', 'More than two days', 'One to two days', 'The same day']],
+    ['Do you have written answers for your most common questions?', ['No, we write each reply from scratch', "A few, saved in someone's notes", 'Yes, but they are out of date', 'Yes, and we review them regularly']],
+    ['How do you know if the business had a good week?', ['A gut feeling', 'I check the bank balance', 'I pull numbers together by hand when I have time', 'A dashboard or report I look at on a set day']],
+    ['Have you ever found a pricing, billing, or refund problem by accident?', ['Yes, more than once', 'Yes, once', 'Not that I know of, but nobody checks', 'No, and we check on a schedule']],
+    ['How much of your week goes to tasks you repeat the same way every time?', ['More than half', 'About a third', 'A few hours', 'Very little, most of it is automated']],
+    ['How are you using AI tools today?', ['Not at all', 'I have tried them, but nothing stuck', 'I use them for writing now and then', 'They are built into how we work, with someone checking the output']]
+  ];
+  const areas = [
+    {name:'Work intake and tracking', indices:[0,1,2], step:'Set up one place where every request comes in, with an owner and a due date on each one.'},
+    {name:'Customer support', indices:[3,4,5], step:'Sort incoming messages into a few clear types and write a standard reply for the top five.'},
+    {name:'Numbers and reporting', indices:[6,7], step:'Pick three numbers that tell you how the business is doing and review them on the same day every week.'},
+    {name:'AI and automation', indices:[8,9], step:'List the tasks you repeat every week and pick one to automate first, with a person checking the result.'}
+  ];
+  let answers = Array(questions.length).fill(null);
+  let current = 0;
+  const get = id => document.getElementById(id);
+  function show(screen, focusId) {
+    ['intro','questions','results'].forEach(id => { get(id).hidden = id !== screen; });
+    get(focusId).focus();
+  }
+  function renderQuestion() {
+    get('progress').textContent = `Question ${current + 1} of ${questions.length}`;
+    get('question-title').textContent = questions[current][0];
+    get('choices').replaceChildren();
+    questions[current][1].forEach((answer, points) => {
+      const label = document.createElement('label');
+      label.className = 'choice';
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'answer';
+      input.value = points;
+      input.checked = answers[current] === points;
+      input.addEventListener('change', () => {
+        answers[current] = points;
+        get('next').disabled = false;
+      });
+      const text = document.createElement('span');
+      text.textContent = answer;
+      label.append(input, text);
+      get('choices').append(label);
+    });
+    get('next').disabled = answers[current] === null;
+    show('questions', 'question-title');
+  }
+  function renderResults() {
+    const total = answers.reduce((sum, value) => sum + value, 0);
+    get('total').textContent = total;
+    get('verdict').textContent = total <= 10
+      ? 'You are losing real time and money every week. The good news is the fixes are simple.'
+      : total <= 20
+      ? 'The basics are in place, and a few leaks are costing you more than you think.'
+      : 'You run a tight operation. The next gains come from automation and better reporting.';
+    const scores = areas.map((area, order) => ({ ...area, order,
+      percent: area.indices.reduce((sum, index) => sum + answers[index], 0) / (area.indices.length * 3) * 100
+    }));
+    get('areas').replaceChildren();
+    scores.forEach(area => {
+      const row = document.createElement('div');
+      const label = document.createElement('div');
+      label.className = 'area-label';
+      const name = document.createElement('strong');
+      name.textContent = area.name;
+      const value = document.createElement('span');
+      value.textContent = `${Math.round(area.percent)}%`;
+      label.append(name, value);
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      bar.setAttribute('role', 'meter');
+      bar.setAttribute('aria-label', area.name);
+      bar.setAttribute('aria-valuemin', '0');
+      bar.setAttribute('aria-valuemax', '100');
+      bar.setAttribute('aria-valuenow', String(Math.round(area.percent)));
+      const fill = document.createElement('div');
+      fill.className = 'bar-fill';
+      fill.style.width = `${area.percent}%`;
+      bar.append(fill);
+      row.append(label, bar);
+      get('areas').append(row);
+    });
+    get('steps').replaceChildren();
+    // A perfect score has no weak area, so the Start here section is hidden.
+    const perfect = total === questions.length * 3;
+    get('steps-title').hidden = perfect;
+    get('steps').hidden = perfect;
+    // Compare unrounded percentages. Ties follow the supplied area order.
+    if (!perfect) scores.filter(area => area.percent < 100).sort((a,b) => a.percent - b.percent || a.order - b.order).slice(0,2).forEach(area => {
+      const step = document.createElement('div');
+      step.className = 'first-step';
+      const heading = document.createElement('h3');
+      heading.textContent = area.name;
+      const text = document.createElement('p');
+      text.textContent = area.step;
+      step.append(heading, text);
+      get('steps').append(step);
+    });
+    show('results', 'results-title');
+  }
+  get('start').addEventListener('click', renderQuestion);
+  get('back').addEventListener('click', () => {
+    if (current === 0) show('intro', 'intro-title');
+    else { current--; renderQuestion(); }
+  });
+  get('next').addEventListener('click', () => {
+    if (answers[current] === null) return;
+    if (current === questions.length - 1) renderResults();
+    else { current++; renderQuestion(); }
+  });
+  get('restart').addEventListener('click', () => {
+    answers = Array(questions.length).fill(null);
+    current = 0;
+    get('choices').replaceChildren();
+    get('areas').replaceChildren();
+    get('steps').replaceChildren();
+    get('total').textContent = '';
+    get('verdict').textContent = '';
+    show('intro', 'intro-title');
+  });
+</script>
+</body>
+</html>

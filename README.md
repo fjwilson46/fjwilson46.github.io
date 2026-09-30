@@ -8,6 +8,7 @@ Live site: https://fjwilson46.github.io
 
 * `index.html`: the portfolio. Six results with the numbers behind them, the AI tools I build, and my consulting links.
 * `checker.html`: a resume and cover letter checker. Paste your text and get a plain PASS or FAIL with the reasons.
+* `quiz.html`: the Operations Check Up. Ten questions for business owners that score where the business is losing time and money and suggest a first step. Built with Codex from my written specification, then tested in a browser and checked against my writing rules before it went live.
 * `og-card.png` and `fred-wilson.jpg`: the images used on the site and in link previews.
 
 ## How it was built
