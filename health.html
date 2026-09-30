@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">
+<title>Portfolio Health Check | Fred Wilson</title>
+<meta name="description" content="Drop in a project list from Jira, Asana, or a spreadsheet. See what is overdue, stalled, or unowned, and the three decisions leadership needs to make this week. Runs in your browser. Nothing is saved or sent.">
+<style>
+  :root {
+    --bg: #f7f5f0; --surface: #ffffff; --ink: #16243a; --muted: #55627a;
+    --navy: #1f3a5f; --teal: #0f7c82; --gold: #b8862b; --line: #e2ddd2; --track: #ebe6dc;
+    --red: #b3362b; --yellow: #9a6a00; --green: #1d7a46;
+    --red-bg: #fbeceb; --yellow-bg: #fbf3df; --green-bg: #e8f4ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1826; --surface: #172436; --ink: #eef2f7; --muted: #a9b6c9;
+            --navy: #9cc0ea; --teal: #4fc3c9; --gold: #e0b35a; --line: #28384f; --track: #22334a;
+            --red: #ff8a7d; --yellow: #f0c060; --green: #5fd08f;
+            --red-bg: #3a1f22; --yellow-bg: #3a3120; --green-bg: #1b3326; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 17px/1.6 "Segoe UI", system-ui, -apple-system, Arial, sans-serif; }
+  a { color: var(--teal); }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 20px 60px; }
+  header { padding: 40px 0 18px; }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 8px 0 10px; color: var(--navy); }
+  h2 { font-size: 20px; color: var(--navy); margin: 30px 0 10px; }
+  .sub { color: var(--muted); margin: 0 0 8px; }
+  label { font-weight: 600; display: block; margin: 12px 0 6px; }
+  .hint { color: var(--muted); font-weight: 400; font-size: 14px; }
+  textarea { width: 100%; min-height: 200px; padding: 14px; border-radius: 10px; border: 1.5px solid var(--line);
+             background: var(--surface); color: var(--ink); font: 14px/1.5 Consolas, "Courier New", monospace; resize: vertical; }
+  textarea.over { border-color: var(--teal); }
+  input[type=date] { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 14px 0; }
+  button, .filebtn { padding: 11px 20px; border-radius: 8px; border: 0; background: var(--navy); color: var(--bg);
+           font: 600 16px "Segoe UI", system-ui, sans-serif; cursor: pointer; display: inline-block; }
+  button.ghost, .filebtn { background: transparent; color: var(--navy); border: 1.5px solid var(--navy); }
+  .filebtn input { display: none; }
+  .error { background: var(--red-bg); border: 1px solid var(--red); border-radius: 10px; padding: 12px 16px; margin: 16px 0; }
+  [hidden] { display: none !important; }
+  .headline { font-size: 22px; font-weight: 700; margin: 26px 0 4px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 16px 0; }
+  .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .tile b { display: block; font-size: 26px; line-height: 1.2; color: var(--navy); }
+  .tile span { color: var(--muted); font-size: 14.5px; }
+  .tile.red b { color: var(--red); } .tile.yellow b { color: var(--yellow); } .tile.green b { color: var(--green); }
+  .decisions { background: var(--surface); border: 1px solid var(--line); border-left: 6px solid var(--gold); border-radius: 10px; padding: 14px 18px; }
+  .decisions ol { margin: 6px 0 0; padding-left: 22px; }
+  .decisions li { margin: 6px 0; }
+  .owners { display: flex; flex-wrap: wrap; gap: 8px; }
+  .owner { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-size: 15px; }
+  .owner.heavy { border-color: var(--yellow); background: var(--yellow-bg); }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); font-size: 15px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--navy); color: var(--bg); font-weight: 600; }
+  .pill { display: inline-block; border-radius: 99px; padding: 1px 10px; font-weight: 700; font-size: 13px; white-space: nowrap; }
+  .pill.red { background: var(--red-bg); color: var(--red); }
+  .pill.yellow { background: var(--yellow-bg); color: var(--yellow); }
+  .pill.green { background: var(--green-bg); color: var(--green); }
+  .muted { color: var(--muted); font-size: 13.5px; }
+  .next { display: block; margin-top: 4px; color: var(--teal); }
+  .note { color: var(--muted); font-size: 14.5px; margin-top: 26px; }
+  @media (max-width: 700px) {
+    table, tbody, tr, td { display: block; width: 100%; }
+    tr.head { display: none; }
+    tr { border-bottom: 1px solid var(--line); padding: 6px 0; }
+    td { border: 0; padding: 3px 12px; }
+    td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); font-size: 13px; }
+  }
+  @media print {
+    body { background: #fff; color: #000; }
+    .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="no-print">
+  <a href="index.html">Back to Fred Wilson</a>
+  <h1>Portfolio Health Check</h1>
+  <p class="sub">Drop in a project list exported from Jira, Asana, or a spreadsheet. See what is overdue, stalled, or has no owner, and the three decisions leadership needs to make this week. It runs in your browser. Nothing is saved or sent anywhere.</p>
+</header>
+
+<section id="intake" class="no-print">
+  <label for="csv">Project list as CSV <span class="hint">(paste it, drop a file on the box, or choose a file)</span></label>
+  <textarea id="csv" placeholder="Project,Owner,Status,Due Date,Last Updated&#10;Website refresh,Avery,In progress,10/15/2026,09/28/2026"></textarea>
+  <div class="row">
+    <label class="filebtn">Choose a CSV file<input type="file" id="file" accept=".csv,text/csv"></label>
+    <span><label for="asof" style="display:inline;margin:0 8px 0 0">Review date</label><input type="date" id="asof"></span>
+  </div>
+  <div class="row">
+    <button id="run">Check the portfolio</button>
+    <button id="sample" class="ghost">Load a sample</button>
+  </div>
+  <p class="hint">Needs a project name column. Works better with Owner, Status, Due Date, and Last Updated. Also reads Priority, Percent Complete, Budget, and Spent if present. Column names can vary, for example Summary, Assignee, or Target Date.</p>
+</section>
+
+<div class="error" id="error" role="alert" hidden></div>
+
+<section id="report" hidden aria-live="polite">
+  <div class="row no-print">
+    <button id="copy">Copy the summary</button>
+    <button id="print" class="ghost">Print</button>
+    <span class="muted" id="copied"></span>
+  </div>
+  <div class="headline" id="headline"></div>
+  <p class="sub" id="asof-line"></p>
+  <div class="tiles" id="tiles"></div>
+  <div class="decisions">
+    <b>Three decisions for this week</b>
+    <ol id="decisions"></ol>
+  </div>
+  <h2>Workload by owner</h2>
+  <div class="owners" id="owners"></div>
+  <h2>Every open project</h2>
+  <table id="table"></table>
+</section>
+
+<p class="note">In a prior role I brought overdue work from 50 percent to under 20 percent with a governance framework for intake, milestones, and executive reporting. This page is a small version of the weekly review behind it. Built by <a href="index.html">Fred Wilson</a>.</p>
+</div>
+
+<script id="health-engine">
+(function (global) {
+  "use strict";
+  var DAY_MS = 86400000;
+  var STALE_DAYS = 14, VERY_STALE_DAYS = 30, DUE_SOON_DAYS = 14, HEAVY_LOAD = 5, OVERDUE_TARGET = 20;
+  var MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+  var HINTS = [
+    ["name", ["project", "project name", "name", "summary", "title", "initiative", "task", "task name", "epic", "epic name"]],
+    ["owner", ["owner", "project owner", "assignee", "lead", "project lead", "assigned to", "responsible", "dri"]],
+    ["status", ["status", "state", "stage", "section/column", "section", "health"]],
+    ["due", ["due date", "due", "target date", "end date", "deadline", "due on", "target end", "finish date"]],
+    ["updated", ["last updated", "updated", "last update", "last modified", "modified", "last activity", "updated at", "status date"]],
+    ["priority", ["priority", "severity", "tier"]],
+    ["progress", ["percent complete", "% complete", "progress", "complete %", "% done", "completion"]],
+    ["budget", ["budget", "approved budget", "planned cost", "budget amount"]],
+    ["spent", ["spent", "actual", "actual cost", "actual spend", "cost to date", "spend"]],
+    ["completed", ["completed at", "completed on", "done date", "resolved", "resolution date", "completion date"]]
+  ];
+
+  var NEXT = {
+    overdue: "Reset the date with the owner or cut scope, then tell stakeholders the new date.",
+    blocked: "Name the blocker and the person who can remove it. Escalate if it is older than a week.",
+    overBudget: "Approve more budget or cut scope before more is spent.",
+    veryStale: "Ask the owner for a status update this week, or close the project.",
+    stale: "Ask the owner for a short status update.",
+    noOwner: "Assign one accountable owner.",
+    noDue: "Set a due date so progress can be tracked.",
+    hold: "Confirm it is still a priority, or close it.",
+    dueSoon: "Confirm the date is still realistic with the owner.",
+    nearBudget: "Check the remaining budget against the remaining work."
+  };
+
+  var NEXT_ORDER = ["overdue", "blocked", "overBudget", "noOwner", "veryStale", "stale", "noDue", "hold", "dueSoon", "nearBudget"];
+
+  function parseCsv(text) {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    var rows = [], row = [], field = "", inQ = false, any = false, i = 0, n = text.length;
+    while (i < n) {
+      var c = text[i];
+      if (inQ) {
+        if (c === '"') { if (text[i + 1] === '"') { field += '"'; i += 2; continue; } inQ = false; i++; continue; }
+        field += c; i++; continue;
+      }
+      if (c === '"' && field === "") { inQ = true; any = true; i++; continue; }
+      if (c === ",") { row.push(field); field = ""; any = true; i++; continue; }
+      if (c === "\r" || c === "\n") {
+        if (any || field !== "") { row.push(field); rows.push(row); }
+        row = []; field = ""; any = false;
+        if (c === "\r" && text[i + 1] === "\n") i++;
+        i++; continue;
+      }
+      field += c; any = true; i++;
+    }
+    if (any || field !== "") { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  function mapColumns(header) {
+    var lower = header.map(function (h) { return h.toLowerCase().trim(); });
+    var found = {}, used = {};
+    HINTS.forEach(function (entry) {
+      for (var k = 0; k < entry[1].length; k++) {
+        var idx = lower.indexOf(entry[1][k]);
+        if (idx >= 0 && !used[idx]) { found[entry[0]] = idx; used[idx] = true; break; }
+      }
+    });
+    if (!("name" in found)) {
+      var err = new Error("This file needs a project name column, for example Project, Name, or Summary. Columns found: " + header.join(", ") + ".");
+      err.friendly = true;
+      throw err;
+    }
+    return found;
+  }
+
+  function dayOf(y, m, d) {
+    if (y < 100) y += 2000;
+    if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+    var t = Date.UTC(y, m - 1, d), c = new Date(t);
+    if (c.getUTCMonth() !== m - 1) return null;
+    return Math.round(t / DAY_MS);
+  }
+
+  function parseDate(text) {
+    var s = (text || "").trim(), m;
+    if (!s) return null;
+    s = s.replace(/[T ]\d{1,2}:\d{2}.*$/, "").trim();
+    if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s))) return dayOf(+m[1], +m[2], +m[3]);
+    if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(s))) return dayOf(+m[3], +m[1], +m[2]);
+    if ((m = /^(\d{1,2})[\/\- ]([A-Za-z]{3})[A-Za-z]*[\/\- ,]+(\d{2}|\d{4})$/.exec(s))) {
+      var mi = MONTHS.indexOf(m[2].toLowerCase());
+      return mi < 0 ? null : dayOf(+m[3], mi + 1, +m[1]);
+    }
+    if ((m = /^([A-Za-z]{3})[A-Za-z]*\.? (\d{1,2}),? (\d{4})$/.exec(s))) {
+      var mj = MONTHS.indexOf(m[1].toLowerCase());
+      return mj < 0 ? null : dayOf(+m[3], mj + 1, +m[2]);
+    }
+    return null;
+  }
+
+  function fmtDate(day) {
+    if (day === null) return "";
+    var d = new Date(day * DAY_MS);
+    return String(d.getUTCMonth() + 1).padStart(2, "0") + "/" + String(d.getUTCDate()).padStart(2, "0") + "/" + d.getUTCFullYear();
+  }
+
+  function num(text) {
+    if (text === undefined || text === null) return null;
+    var s = String(text).replace(/[^0-9.\-]/g, "");
+    if (s === "" || isNaN(Number(s))) return null;
+    return Number(s);
+  }
+
+  function percent(text) {
+    var v = num(text);
+    if (v === null) return null;
+    if (v <= 1 && String(text).indexOf("%") < 0 && String(text).indexOf(".") >= 0) v = v * 100;
+    return Math.max(0, Math.min(100, v));
+  }
+
+  function money(v) { return "$" + Math.round(v).toLocaleString("en-US"); }
+  function plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
+  function quote(names) {
+    var q = names.slice(0, 3).map(function (s) { return "“" + s + "”"; });
+    return q.join(", ") + (names.length > 3 ? ", and " + (names.length - 3) + " more" : "");
+  }
+
+  function runHealth(csvText, asOf) {
+    var table = parseCsv(csvText);
+    if (table.length < 2) { var e = new Error("No projects found. The file needs a header row and at least one project."); e.friendly = true; throw e; }
+    var header = table[0], col = mapColumns(header);
+    var get = function (row, key) { return key in col && row[col[key]] !== undefined ? String(row[col[key]]).trim() : ""; };
+
+    var projects = [];
+    for (var r = 1; r < table.length; r++) {
+      var row = table[r], name = get(row, "name");
+      if (!name) continue;
+      var status = get(row, "status"), low = status.toLowerCase();
+      var p = {
+        name: name, owner: get(row, "owner"), status: status,
+        due: parseDate(get(row, "due")), updated: parseDate(get(row, "updated")),
+        priority: get(row, "priority"), progress: percent(get(row, "progress")),
+        budget: num(get(row, "budget")), spent: num(get(row, "spent")),
+        done: /\b(done|complete|completed|closed|resolved|cancell?ed|shipped|launched|delivered)\b/.test(low) || !!get(row, "completed"),
+        reasons: []
+      };
+      p.high = /\b(high|highest|critical|urgent|p0|p1)\b/i.test(p.priority) || p.priority.trim() === "1";
+      projects.push(p);
+    }
+    if (!projects.length) { var e2 = new Error("No projects found in this file."); e2.friendly = true; throw e2; }
+
+    var open = projects.filter(function (p) { return !p.done; });
+    open.forEach(function (p) {
+      var add = function (level, key, text) { p.reasons.push({ level: level, key: key, text: text }); };
+      var low = p.status.toLowerCase();
+      if (p.due !== null && p.due < asOf) { p.daysOver = asOf - p.due; add("red", "overdue", plural(p.daysOver, "day") + " past the due date."); }
+      if (/\b(blocked|stuck)\b/.test(low) || /^red$/.test(low)) add("red", "blocked", "Marked " + p.status + ".");
+      if (p.budget && p.spent !== null && p.spent > p.budget) add("red", "overBudget", "Spent " + money(p.spent) + " of a " + money(p.budget) + " budget.");
+      if (p.updated !== null) {
+        var quiet = asOf - p.updated;
+        if (quiet > VERY_STALE_DAYS) add("red", "veryStale", "No update in " + quiet + " days.");
+        else if (quiet > STALE_DAYS) add("yellow", "stale", "No update in " + quiet + " days.");
+        p.quiet = quiet;
+      }
+      if (!p.owner) add("yellow", "noOwner", "No owner.");
+      if (p.due === null) add("yellow", "noDue", "No due date.");
+      if (/\b(on hold|paused|at risk|delayed)\b/.test(low) || /^(yellow|amber)$/.test(low)) add("yellow", "hold", "Marked " + p.status + ".");
+      if (p.due !== null && p.due >= asOf && p.due - asOf <= DUE_SOON_DAYS && p.progress !== null && p.progress < 50) {
+        add("yellow", "dueSoon", "Due in " + plural(p.due - asOf, "day") + " and only " + Math.round(p.progress) + " percent complete.");
+      }
+      if (p.budget && p.spent !== null && p.spent <= p.budget && p.spent >= 0.9 * p.budget && (p.progress === null || p.progress < 90)) {
+        add("yellow", "nearBudget", "Spent " + Math.round(100 * p.spent / p.budget) + " percent of the budget" + (p.progress !== null ? " at " + Math.round(p.progress) + " percent complete." : "."));
+      }
+      var reds = p.reasons.filter(function (x) { return x.level === "red"; }).length;
+      p.rag = reds ? "red" : p.reasons.length ? "yellow" : "green";
+      p.severity = reds * 100 + (p.reasons.length - reds) * 10 + (p.daysOver || 0) + (p.high ? 25 : 0);
+      // Next step follows a fixed priority: an unowned project needs an owner before anyone can ask for an update
+      var firstKey = NEXT_ORDER.filter(function (k) { return p.reasons.some(function (x) { return x.key === k; }); })[0];
+      p.next = firstKey ? NEXT[firstKey] : "No action needed.";
+    });
+    var RANK = { red: 0, yellow: 1, green: 2 };
+    open.sort(function (a, b) { return RANK[a.rag] - RANK[b.rag] || b.severity - a.severity || a.name.localeCompare(b.name); });
+
+    // Workload by owner
+    var load = {};
+    open.forEach(function (p) {
+      var o = p.owner || "No owner";
+      load[o] = load[o] || { owner: o, open: 0, red: 0 };
+      load[o].open++;
+      if (p.rag === "red") load[o].red++;
+    });
+    var owners = Object.keys(load).map(function (k) { return load[k]; })
+      .sort(function (a, b) { return b.open - a.open || b.red - a.red || a.owner.localeCompare(b.owner); });
+    owners.forEach(function (o) { o.heavy = o.owner !== "No owner" && (o.open >= HEAVY_LOAD || o.red >= 2); });
+
+    var count = function (key) { return open.filter(function (p) { return p.reasons.some(function (x) { return x.key === key; }); }); };
+    var overdue = count("overdue"), stale = count("veryStale").concat(count("stale")), noOwner = count("noOwner");
+    var blocked = count("blocked"), overBudget = count("overBudget");
+    var pct = open.length ? Math.round(100 * overdue.length / open.length) : 0;
+
+    // Three decisions, most important first
+    var decisions = [];
+    var worst = overdue.slice().sort(function (a, b) { return (b.high - a.high) || (b.daysOver - a.daysOver); })[0];
+    if (worst) decisions.push("Reset the date or cut scope on “" + worst.name + "”. It is " + plural(worst.daysOver, "day") + " overdue" + (worst.owner ? " (owner: " + worst.owner + ")." : " and has no owner."));
+    var heavy = owners.filter(function (o) { return o.heavy; })[0];
+    if (heavy) decisions.push("Rebalance work for " + heavy.owner + ": " + plural(heavy.open, "open project") + ", " + heavy.red + " at risk.");
+    if (overBudget.length) decisions.push("Decide on budget for “" + overBudget[0].name + "”: spent " + money(overBudget[0].spent) + " of " + money(overBudget[0].budget) + ".");
+    if (blocked.length) decisions.push("Clear the blocker on “" + blocked[0].name + "”" + (blocked[0].owner ? " with " + blocked[0].owner : "") + ".");
+    if (noOwner.length) decisions.push("Assign owners to " + plural(noOwner.length, "project") + ": " + quote(noOwner.map(function (p) { return p.name; })) + ".");
+    if (stale.length) decisions.push("Get an update or close " + plural(stale.length, "quiet project") + ": " + quote(stale.map(function (p) { return p.name; })) + ".");
+    if (overdue.length > 1) decisions.push("Review the other " + plural(overdue.length - 1, "overdue project") + " in one meeting and set new dates.");
+    decisions = decisions.slice(0, 3);
+    if (!decisions.length) decisions.push("No decisions needed this week. Every open project is on track.");
+
+    var headline = open.length
+      ? overdue.length + " of " + open.length + " open projects are overdue (" + pct + " percent). " +
+        (pct < OVERDUE_TARGET ? "That is under the 20 percent line a healthy portfolio stays below." : "A healthy portfolio stays under 20 percent.")
+      : "Every project in this list is done.";
+
+    return {
+      asOf: fmtDate(asOf), headline: headline, decisions: decisions, owners: owners,
+      columns: Object.keys(col),
+      summary: {
+        total: projects.length, open: open.length, done: projects.length - open.length, overdue: overdue.length, overduePct: pct,
+        red: open.filter(function (p) { return p.rag === "red"; }).length,
+        yellow: open.filter(function (p) { return p.rag === "yellow"; }).length,
+        green: open.filter(function (p) { return p.rag === "green"; }).length,
+        stale: stale.length, noOwner: noOwner.length
+      },
+      projects: open.map(function (p) {
+        return { name: p.name, owner: p.owner, status: p.status, due: fmtDate(p.due), updated: fmtDate(p.updated),
+          rag: p.rag, reasons: p.reasons.map(function (x) { return x.text; }), next: p.next, high: p.high };
+      })
+    };
+  }
+
+  global.runHealth = runHealth;
+  global.healthParseDate = parseDate;
+})(this);
+</script>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var last = null;
+  var esc = function (s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
+  var RAG = { red: "At risk", yellow: "Watch", green: "On track" };
+
+  function todayIso() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  $("asof").value = todayIso();
+
+  function asOfDay() {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec($("asof").value || todayIso());
+    return Math.round(Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000);
+  }
+
+  function render(r) {
+    var s = r.summary;
+    $("headline").textContent = r.headline;
+    $("asof-line").textContent = "Review date " + r.asOf + ". " + s.total + " projects in the list, " + s.done + " done, " + s.open + " open.";
+    $("tiles").innerHTML =
+      '<div class="tile"><b>' + s.overduePct + '%</b><span>of open work overdue</span></div>' +
+      '<div class="tile red"><b>' + s.red + '</b><span>at risk</span></div>' +
+      '<div class="tile yellow"><b>' + s.yellow + '</b><span>to watch</span></div>' +
+      '<div class="tile green"><b>' + s.green + '</b><span>on track</span></div>' +
+      '<div class="tile"><b>' + s.stale + '</b><span>gone quiet</span></div>' +
+      '<div class="tile"><b>' + s.noOwner + '</b><span>with no owner</span></div>';
+    $("decisions").innerHTML = r.decisions.map(function (d) { return "<li>" + esc(d) + "</li>"; }).join("");
+    $("owners").innerHTML = r.owners.map(function (o) {
+      return '<span class="owner' + (o.heavy ? " heavy" : "") + '"><b>' + esc(o.owner) + "</b>: " + o.open + " open" + (o.red ? ", " + o.red + " at risk" : "") + "</span>";
+    }).join("") || '<span class="muted">No open projects.</span>';
+    $("table").innerHTML = '<tr class="head"><th>Health</th><th>Project</th><th>Owner</th><th>Due</th><th>Last update</th><th>Why, and what to do</th></tr>' +
+      (r.projects.map(function (p) {
+        return "<tr><td data-label=\"Health\"><span class=\"pill " + p.rag + "\">" + RAG[p.rag] + "</span></td>" +
+          "<td data-label=\"Project\"><b>" + esc(p.name) + "</b>" + (p.status ? "<br><span class=\"muted\">" + esc(p.status) + (p.high ? ", high priority" : "") + "</span>" : "") + "</td>" +
+          "<td data-label=\"Owner\">" + (p.owner ? esc(p.owner) : "<span class=\"muted\">None</span>") + "</td>" +
+          "<td data-label=\"Due\">" + (p.due || "<span class=\"muted\">None</span>") + "</td>" +
+          "<td data-label=\"Last update\">" + (p.updated || "<span class=\"muted\">Unknown</span>") + "</td>" +
+          "<td>" + (p.reasons.length ? esc(p.reasons.join(" ")) : "On track.") + (p.reasons.length ? "<span class=\"next\">Next step: " + esc(p.next) + "</span>" : "") + "</td></tr>";
+      }).join("") || '<tr><td colspan="6">No open projects.</td></tr>');
+    $("report").hidden = false;
+    $("report").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function run() {
+    $("error").hidden = true;
+    $("copied").textContent = "";
+    try {
+      last = window.runHealth($("csv").value, asOfDay());
+      render(last);
+    } catch (err) {
+      last = null;
+      $("report").hidden = true;
+      $("error").textContent = err.friendly ? err.message : "That list could not be read. Check that it is saved as a CSV with a header row.";
+      $("error").hidden = false;
+    }
+  }
+
+  function summaryText(r) {
+    var s = r.summary;
+    return ["Portfolio health, review date " + r.asOf, r.headline,
+      s.red + " at risk, " + s.yellow + " to watch, " + s.green + " on track. " + s.stale + " gone quiet, " + s.noOwner + " with no owner.",
+      "", "Three decisions for this week:"].concat(r.decisions.map(function (d, i) { return (i + 1) + ". " + d; })).join("\n");
+  }
+
+  function loadFile(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () { $("csv").value = String(reader.result); run(); };
+    reader.readAsText(file);
+  }
+
+  $("run").addEventListener("click", run);
+  $("file").addEventListener("change", function (e) { loadFile(e.target.files[0]); e.target.value = ""; });
+  var box = $("csv");
+  ["dragenter", "dragover"].forEach(function (ev) { box.addEventListener(ev, function (e) { e.preventDefault(); box.classList.add("over"); }); });
+  ["dragleave", "drop"].forEach(function (ev) { box.addEventListener(ev, function (e) { e.preventDefault(); box.classList.remove("over"); }); });
+  box.addEventListener("drop", function (e) { loadFile(e.dataTransfer.files[0]); });
+  $("print").addEventListener("click", function () { window.print(); });
+  $("copy").addEventListener("click", function () {
+    if (!last) return;
+    var text = summaryText(last);
+    var done = function () { $("copied").textContent = "Copied. Paste it into an email or chat."; };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+    function fallback() {
+      var t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select();
+      try { document.execCommand("copy"); done(); } catch (e) { $("copied").textContent = "Copy did not work in this browser. Select the text and copy it instead."; }
+      t.remove();
+    }
+  });
+  $("sample").addEventListener("click", function () {
+    $("asof").value = "2026-09-30";
+    $("csv").value = [
+      "Project,Owner,Status,Priority,Due Date,Last Updated,Percent Complete,Budget,Spent",
+      "Customer portal redesign,Avery,In progress,High,08/21/2026,09/25/2026,70,120000,96000",
+      "Billing system migration,Jordan,Blocked,High,10/31/2026,09/18/2026,40,250000,180000",
+      "Support chatbot pilot,Riley,In progress,Medium,10/08/2026,09/27/2026,35,40000,21000",
+      "Warehouse slotting study,Avery,In progress,Low,09/12/2026,08/20/2026,55,15000,9000",
+      "Vendor contract renewals,Morgan,In progress,High,11/15/2026,09/29/2026,60,,",
+      "New hire onboarding program,,Not started,Medium,12/01/2026,09/02/2026,0,20000,0",
+      "Knowledge base cleanup,Casey,On hold,Low,,08/15/2026,20,,",
+      "Quarterly planning process,Morgan,In progress,High,10/20/2026,09/28/2026,50,,",
+      "Data dashboard rollout,Avery,In progress,Medium,11/30/2026,09/26/2026,45,60000,57000",
+      "Returns process redesign,Avery,In progress,Medium,09/25/2026,09/24/2026,85,30000,24000",
+      "Security audit follow up,Jordan,In progress,High,10/10/2026,09/29/2026,75,50000,31000",
+      "Office move planning,Casey,In progress,Low,12/15/2026,09/10/2026,15,80000,12000",
+      "Help desk tool upgrade,Avery,In progress,Medium,11/05/2026,09/28/2026,30,45000,20000",
+      "Field team scheduling app,,In progress,Medium,01/15/2027,09/21/2026,25,70000,15000",
+      "Annual benefits enrollment,Morgan,Done,High,09/15/2026,09/15/2026,100,,",
+      "Brand guidelines refresh,Riley,Complete,Low,08/30/2026,08/30/2026,100,10000,9500"
+    ].join("\n");
+    run();
+  });
+})();
+</script>
+</body>
+</html>
