@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+  <title>Owner Statement Audit</title>
+  <style>
+    :root {
+      --bg: #f7f5f0;
+      --surface: #ffffff;
+      --ink: #16243a;
+      --muted: #55627a;
+      --navy: #1f3a5f;
+      --teal: #0f7c82;
+      --gold: #b8862b;
+      --line: #e2ddd2;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1826;
+        --surface: #172436;
+        --ink: #eef2f7;
+        --muted: #a9b6c9;
+        --navy: #9cc0ea;
+        --teal: #4fc3c9;
+        --gold: #e0b35a;
+        --line: #28384f;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--bg);
+      color: var(--ink);
+      font: 17px/1.6 "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-width: 0;
+    }
+
+    a {
+      color: var(--teal);
+    }
+
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible {
+      outline: 3px solid var(--gold);
+      outline-offset: 3px;
+    }
+
+    .wrap {
+      width: min(100%, 860px);
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+
+    .top-link {
+      display: inline-block;
+      margin-bottom: 28px;
+      font-weight: 700;
+    }
+
+    h1,
+    h2,
+    h3 {
+      color: var(--navy);
+      line-height: 1.2;
+      margin: 0 0 12px;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 8vw, 4rem);
+    }
+
+    h2 {
+      font-size: 1.45rem;
+    }
+
+    p {
+      margin: 0 0 14px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 22px;
+      margin: 20px 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    label {
+      display: block;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: var(--bg);
+      color: var(--ink);
+      font: inherit;
+    }
+
+    textarea {
+      min-height: 190px;
+      resize: vertical;
+    }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    button,
+    .button {
+      border: 1px solid var(--navy);
+      border-radius: 8px;
+      padding: 10px 16px;
+      background: var(--surface);
+      color: var(--navy);
+      font: inherit;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .primary {
+      background: var(--navy);
+      color: var(--bg);
+    }
+
+    .headline {
+      color: var(--navy);
+      font-size: clamp(2rem, 9vw, 4.5rem);
+      line-height: 1.05;
+      font-weight: 800;
+      margin-bottom: 18px;
+    }
+
+    .finding {
+      display: grid;
+      gap: 8px;
+    }
+
+    .finding-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .amount {
+      color: var(--gold);
+      font-weight: 800;
+    }
+
+    .table-box {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      margin-top: 8px;
+    }
+
+    table {
+      width: 100%;
+      min-width: 620px;
+      border-collapse: collapse;
+      background: var(--surface);
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--navy);
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 700px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .card {
+        padding: 18px;
+      }
+
+      button,
+      .button {
+        width: 100%;
+        text-align: center;
+      }
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+        color: #000000;
+      }
+
+      .no-print,
+      .inputs {
+        display: none !important;
+      }
+
+      .wrap {
+        padding: 0;
+        width: 100%;
+      }
+
+      .card {
+        border-color: #cccccc;
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <a class="top-link no-print" href="index.html">Back to Fred Wilson</a>
+
+    <section id="intro">
+      <h1>Owner Statement Audit</h1>
+      <p>Load your property manager's statement and see how much money to ask about.</p>
+      <p>It runs in your browser. Nothing is saved or sent anywhere.</p>
+    </section>
+
+    <section class="card inputs" aria-labelledby="agreement-heading">
+      <h2 id="agreement-heading">Step 1, your agreement</h2>
+      <div class="grid">
+        <div>
+          <label for="managementFee">Management fee, percent of rent collected</label>
+          <input id="managementFee" type="number" min="0" step="0.01" value="8">
+        </div>
+        <div>
+          <label for="leasingFee">Leasing fee, percent of one month's rent</label>
+          <input id="leasingFee" type="number" min="0" step="0.01" value="50">
+        </div>
+        <div>
+          <label for="repairLimit">Repair approval limit in dollars</label>
+          <input id="repairLimit" type="number" min="0" step="0.01" value="500">
+        </div>
+      </div>
+      <p class="muted">Check these against your management agreement. Duplicate charges are checked within 21 days.</p>
+    </section>
+
+    <section class="card inputs" aria-labelledby="statement-heading">
+      <h2 id="statement-heading">Step 2, your statement</h2>
+      <p>Expected columns: Date, Property, Unit, Category, Description, Amount, Approved.</p>
+      <div>
+        <label for="csvFile">CSV file</label>
+        <input id="csvFile" type="file" accept=".csv,text/csv">
+      </div>
+      <div>
+        <label for="csvText">Paste CSV text instead</label>
+        <textarea id="csvText"></textarea>
+      </div>
+      <div class="buttons">
+        <button type="button" id="sampleButton">Try it with a sample</button>
+      </div>
+    </section>
+
+    <div class="buttons no-print">
+      <button type="button" class="primary" id="runButton">Find the money</button>
+    </div>
+
+    <section id="results" class="hidden" aria-live="polite">
+      <div class="card">
+        <div id="totalHeadline" class="headline"></div>
+        <p>Each item below is a question to ask, not proof of a mistake. Managers often have a good reason.</p>
+      </div>
+
+      <div id="findingsList"></div>
+
+      <section class="card" aria-labelledby="passed-heading">
+        <h2 id="passed-heading">Checks that passed</h2>
+        <ul id="passedList"></ul>
+      </section>
+
+      <section class="card" aria-labelledby="notes-heading">
+        <h2 id="notes-heading">Notes</h2>
+        <ul id="notesList"></ul>
+      </section>
+
+      <div class="buttons no-print">
+        <button type="button" id="printButton">Print or save as PDF</button>
+        <button type="button" id="startOverButton">Start over</button>
+      </div>
+
+      <section class="card" aria-labelledby="contact-heading">
+        <h2 id="contact-heading">Want me to look at a full year?</h2>
+        <p>Through my consulting practice I find the money hiding in small businesses. It starts with a free 30 minute call.</p>
+        <div class="buttons no-print">
+          <a class="button primary" href="mailto:fjwilson46@gmail.com?subject=Owner%20Statement%20Audit">Book a free 30 minute call</a>
+          <a class="button" href="index.html">Back to Fred Wilson</a>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    // ENGINE START
+    const MONEY_FORMATTER = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+    const MONTH_FORMATTER = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+    const DATE_FORMATTER = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+    function cents(value) {
+      return Math.round(Number(value) * 100);
+    }
+
+    function money(value) {
+      return MONEY_FORMATTER.format(cents(value) / 100);
+    }
+
+    function normalizeHeader(value) {
+      return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+    }
+
+    function categoryName(value) {
+      const normalized = normalizeHeader(value);
+      if (normalized === "rent") return "Rent";
+      if (normalized === "management fee") return "Management Fee";
+      if (normalized === "leasing fee") return "Leasing Fee";
+      if (normalized === "repair") return "Repair";
+      return "Other";
+    }
+
+    function parseCsv(text) {
+      const rows = [];
+      let row = [];
+      let cell = "";
+      let quoted = false;
+      const input = String(text || "").replace(/^\uFEFF/, "");
+      for (let index = 0; index < input.length; index += 1) {
+        const char = input[index];
+        const next = input[index + 1];
+        if (quoted) {
+          if (char === '"' && next === '"') {
+            cell += '"';
+            index += 1;
+          } else if (char === '"') {
+            quoted = false;
+          } else {
+            cell += char;
+          }
+        } else if (char === '"') {
+          quoted = true;
+        } else if (char === ",") {
+          row.push(cell);
+          cell = "";
+        } else if (char === "\n") {
+          row.push(cell);
+          rows.push(row);
+          row = [];
+          cell = "";
+        } else if (char !== "\r") {
+          cell += char;
+        }
+      }
+      row.push(cell);
+      if (row.some((value) => String(value).trim() !== "") || input.endsWith(",")) rows.push(row);
+      return rows;
+    }
+
+    function parseAmount(value) {
+      const cleaned = String(value || "").trim().replace(/\$/g, "").replace(/,/g, "");
+      if (!cleaned) return null;
+      const parsed = Number(cleaned);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function parseDate(value) {
+      const raw = String(value || "").trim();
+      let match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (match) return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+      match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (match) return new Date(Date.UTC(Number(match[3]), Number(match[1]) - 1, Number(match[2])));
+      return null;
+    }
+
+    function validDate(date) {
+      return date instanceof Date && !Number.isNaN(date.getTime());
+    }
+
+    function monthKey(date) {
+      return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+    }
+
+    function monthLabel(key) {
+      const [year, monthNumber] = key.split("-").map(Number);
+      return MONTH_FORMATTER.format(new Date(Date.UTC(year, monthNumber - 1, 1)));
+    }
+
+    function dateLabel(date) {
+      return DATE_FORMATTER.format(date);
+    }
+
+    function lastDayOfMonth(key) {
+      const [year, monthNumber] = key.split("-").map(Number);
+      return new Date(Date.UTC(year, monthNumber, 0));
+    }
+
+    function monthsBetween(first, last) {
+      const months = [];
+      let year = first.getUTCFullYear();
+      let month = first.getUTCMonth();
+      const endYear = last.getUTCFullYear();
+      const endMonth = last.getUTCMonth();
+      while (year < endYear || (year === endYear && month <= endMonth)) {
+        months.push(`${year}-${String(month + 1).padStart(2, "0")}`);
+        month += 1;
+        if (month === 12) {
+          year += 1;
+          month = 0;
+        }
+      }
+      return months;
+    }
+
+    function rowNumber(index) {
+      return index + 2;
+    }
+
+    function readRows(csvText) {
+      const notes = [];
+      const parsed = parseCsv(csvText).filter((row) => row.some((value) => String(value).trim() !== ""));
+      if (parsed.length === 0) return { rows: [], notes: ["No rows were found."] };
+      const headers = parsed[0].map(normalizeHeader);
+      const required = ["date", "property", "unit", "category", "description", "amount", "approved"];
+      const indexes = {};
+      required.forEach((name) => {
+        indexes[name] = headers.indexOf(name);
+      });
+      const missing = required.filter((name) => indexes[name] < 0);
+      if (missing.length > 0) return { rows: [], notes: [`Missing column: ${missing.join(", ")}.`] };
+      const rows = [];
+      parsed.slice(1).forEach((rawRow, index) => {
+        const date = parseDate(rawRow[indexes.date]);
+        const amount = parseAmount(rawRow[indexes.amount]);
+        if (!validDate(date) || amount === null) {
+          notes.push(`Row ${rowNumber(index)} could not be read.`);
+          return;
+        }
+        rows.push({
+          rowNumber: rowNumber(index),
+          date,
+          dateKey: date.toISOString().slice(0, 10),
+          month: monthKey(date),
+          property: String(rawRow[indexes.property] || "").trim(),
+          unit: String(rawRow[indexes.unit] || "").trim(),
+          category: categoryName(rawRow[indexes.category]),
+          description: String(rawRow[indexes.description] || "").trim(),
+          amount: cents(amount) / 100,
+          approved: String(rawRow[indexes.approved] || "").trim().toLowerCase() === "yes"
+        });
+      });
+      rows.sort((a, b) => a.date - b.date || a.rowNumber - b.rowNumber);
+      return { rows, notes };
+    }
+
+    function addToMap(map, key, amount) {
+      map.set(key, (map.get(key) || 0) + amount);
+    }
+
+    function usualRentByUnit(rows) {
+      const byUnit = new Map();
+      rows.filter((row) => row.category === "Rent" && row.unit).forEach((row) => {
+        if (!byUnit.has(row.unit)) byUnit.set(row.unit, new Map());
+        const key = String(cents(row.amount));
+        const current = byUnit.get(row.unit).get(key) || { count: 0, amount: row.amount };
+        current.count += 1;
+        byUnit.get(row.unit).set(key, current);
+      });
+      const usual = new Map();
+      byUnit.forEach((amounts, unit) => {
+        let best = null;
+        amounts.forEach((entry) => {
+          if (!best || entry.count > best.count || (entry.count === best.count && entry.amount > best.amount)) best = entry;
+        });
+        if (best) usual.set(unit, best.amount);
+      });
+      return usual;
+    }
+
+    function makeFinding(check, row, amount, found, question) {
+      return {
+        check,
+        date: row.dateKey,
+        dateText: dateLabel(row.date),
+        month: row.month,
+        monthText: monthLabel(row.month),
+        unit: row.unit,
+        found,
+        amount: cents(amount) / 100,
+        question,
+        sort: row.date.getTime()
+      };
+    }
+
+    function audit(csvText, terms) {
+      const managementPercent = Number(terms.managementFeePercent ?? terms.managementFee ?? 0);
+      const leasingPercent = Number(terms.leasingFeePercent ?? terms.leasingFee ?? 0);
+      const repairLimit = Number(terms.repairApprovalLimit ?? terms.repairLimit ?? 0);
+      const findings = [];
+      const passed = [];
+      const { rows, notes } = readRows(csvText);
+      if (rows.length === 0) return { total: 0, findings: [], passed: [], notes };
+
+      const firstDate = rows[0].date;
+      const lastDate = rows[rows.length - 1].date;
+      const months = monthsBetween(firstDate, lastDate);
+      const rentByPropertyMonth = new Map();
+      const feeRowsByPropertyMonth = new Map();
+
+      rows.forEach((row) => {
+        const key = `${row.property}|${row.month}`;
+        if (row.category === "Rent") addToMap(rentByPropertyMonth, key, row.amount);
+        if (row.category === "Management Fee") {
+          if (!feeRowsByPropertyMonth.has(key)) feeRowsByPropertyMonth.set(key, []);
+          feeRowsByPropertyMonth.get(key).push(row);
+        }
+      });
+
+      const matchedManagementMonths = [];
+      feeRowsByPropertyMonth.forEach((feeRows, key) => {
+        const rent = rentByPropertyMonth.get(key) || 0;
+        const expected = cents(rent * managementPercent / 100) / 100;
+        const actual = cents(feeRows.reduce((sum, row) => sum + row.amount, 0)) / 100;
+        const difference = cents(actual - expected) / 100;
+        const feeRow = feeRows[feeRows.length - 1];
+        if (cents(difference) > 100) {
+          findings.push(makeFinding(
+            "Management fee over the agreement",
+            feeRow,
+            difference,
+            `Management fees were ${money(difference)} over the agreement for ${monthLabel(feeRow.month)}.`,
+            `Our agreement says ${managementPercent}% of rent collected, which is ${money(expected)} for ${monthLabel(feeRow.month)}. The statement shows ${money(actual)}. Can you explain the ${money(difference)} difference?`
+          ));
+        } else {
+          matchedManagementMonths.push(monthLabel(feeRow.month));
+        }
+      });
+      if (matchedManagementMonths.length > 0) {
+        passed.push(`Management fees matched the agreement in ${matchedManagementMonths.join(" and ")}.`);
+      }
+
+      const nonRentRows = rows.filter((row) => row.category !== "Rent");
+      for (let i = 0; i < nonRentRows.length; i += 1) {
+        for (let j = i + 1; j < nonRentRows.length; j += 1) {
+          const first = nonRentRows[i];
+          const second = nonRentRows[j];
+          const dayDiff = Math.round((second.date - first.date) / 86400000);
+          if (dayDiff > 21) continue;
+          if (first.description === second.description && cents(first.amount) === cents(second.amount)) {
+            findings.push(makeFinding(
+              "Possible duplicate charge",
+              second,
+              second.amount,
+              `${money(second.amount)} appears twice for ${second.description}.`,
+              `I see two charges of ${money(second.amount)} for ${second.description}, on ${dateLabel(first.date)} and ${dateLabel(second.date)}. Was this one job billed twice, or two separate visits?`
+            ));
+          }
+        }
+      }
+      if (!findings.some((finding) => finding.check === "Possible duplicate charge")) {
+        passed.push("No possible duplicate charges were found within 21 days.");
+      }
+
+      rows.filter((row) => row.category === "Repair").forEach((row) => {
+        if (cents(row.amount) > cents(repairLimit) && !row.approved) {
+          findings.push(makeFinding(
+            "Repair over the approval limit",
+            row,
+            row.amount,
+            `${money(row.amount)} was over the repair approval limit.`,
+            `The charge of ${money(row.amount)} for ${row.description} is over our ${money(repairLimit)} approval limit. Can you send the invoice and show when I approved it?`
+          ));
+        }
+      });
+      if (!findings.some((finding) => finding.check === "Repair over the approval limit")) {
+        passed.push("No unapproved repairs were over the approval limit.");
+      }
+
+      const usualRent = usualRentByUnit(rows);
+      rows.filter((row) => row.category === "Leasing Fee").forEach((row) => {
+        const rent = usualRent.get(row.unit);
+        if (!rent) {
+          notes.push(`Could not check the leasing fee for Unit ${row.unit}: no rent found for that unit.`);
+          return;
+        }
+        const allowed = cents(rent * leasingPercent / 100) / 100;
+        const difference = cents(row.amount - allowed) / 100;
+        if (cents(difference) > 100) {
+          findings.push(makeFinding(
+            "Leasing fee over the agreement",
+            row,
+            difference,
+            `The leasing fee was ${money(difference)} over the agreement for Unit ${row.unit}.`,
+            `Our agreement sets the leasing fee at ${leasingPercent}% of one month's rent, which is ${money(allowed)} for Unit ${row.unit}. The statement shows ${money(row.amount)}. Can you explain the ${money(difference)} difference?`
+          ));
+        }
+      });
+      if (!findings.some((finding) => finding.check === "Leasing fee over the agreement")) {
+        passed.push("Leasing fees with rent history matched the agreement.");
+      }
+
+      const units = Array.from(usualRent.keys());
+      units.forEach((unit) => {
+        months.forEach((month) => {
+          const hasRent = rows.some((row) => row.category === "Rent" && row.unit === unit && row.month === month);
+          if (!hasRent) {
+            const date = lastDayOfMonth(month);
+            findings.push(makeFinding(
+              "Missing rent",
+              { date, dateKey: date.toISOString().slice(0, 10), month, unit },
+              usualRent.get(unit),
+              `No rent row was found for Unit ${unit} in ${monthLabel(month)}.`,
+              `I do not see rent for Unit ${unit} in ${monthLabel(month)}. Was the unit vacant, was rent late, or was it collected and not reported?`
+            ));
+          }
+        });
+      });
+      if (!findings.some((finding) => finding.check === "Missing rent")) {
+        passed.push("Rent was found for each unit in each statement month.");
+      }
+
+      findings.sort((a, b) => a.sort - b.sort || a.check.localeCompare(b.check));
+      const total = cents(findings.reduce((sum, finding) => sum + finding.amount, 0)) / 100;
+      return { total, findings, passed, notes };
+    }
+    // ENGINE END
+
+    const sampleCsv = `Date,Property,Unit,Category,Description,Amount,Approved
+2026-07-01,Oak Street Duplex,A,Rent,July rent,1450.00,
+2026-07-03,Oak Street Duplex,B,Rent,July rent,1300.00,
+2026-07-15,Oak Street Duplex,A,Repair,"Ace Plumbing, kitchen leak",340.00,
+2026-07-22,Oak Street Duplex,B,Repair,"Cool Air, AC service",185.00,
+2026-07-25,Oak Street Duplex,,Repair,"Green Yard, lawn care",85.00,
+2026-07-31,Oak Street Duplex,,Management Fee,July management fee,220.00,
+2026-08-01,Oak Street Duplex,A,Rent,August rent,1450.00,
+2026-08-02,Oak Street Duplex,A,Repair,"Ace Plumbing, kitchen leak",340.00,
+2026-08-04,Oak Street Duplex,B,Rent,August rent,1300.00,
+2026-08-12,Oak Street Duplex,B,Repair,"Lone Star Plumbing, water heater replacement",1240.00,no
+2026-08-24,Oak Street Duplex,,Repair,"Green Yard, lawn care",85.00,
+2026-08-31,Oak Street Duplex,,Management Fee,August management fee,240.00,
+2026-09-01,Oak Street Duplex,A,Rent,September rent,1450.00,
+2026-09-10,Oak Street Duplex,A,Repair,"Bright Electric, outlet repair",620.00,yes
+2026-09-20,Oak Street Duplex,B,Leasing Fee,New lease Unit B,1300.00,
+2026-09-23,Oak Street Duplex,,Repair,"Green Yard, lawn care",85.00,
+2026-09-30,Oak Street Duplex,,Management Fee,September management fee,116.00,`;
+
+    const fileInput = document.getElementById("csvFile");
+    const textInput = document.getElementById("csvText");
+    const sampleButton = document.getElementById("sampleButton");
+    const runButton = document.getElementById("runButton");
+    const results = document.getElementById("results");
+    const totalHeadline = document.getElementById("totalHeadline");
+    const findingsList = document.getElementById("findingsList");
+    const passedList = document.getElementById("passedList");
+    const notesList = document.getElementById("notesList");
+    const printButton = document.getElementById("printButton");
+    const startOverButton = document.getElementById("startOverButton");
+
+    function getTerms() {
+      return {
+        managementFeePercent: Number(document.getElementById("managementFee").value || 0),
+        leasingFeePercent: Number(document.getElementById("leasingFee").value || 0),
+        repairApprovalLimit: Number(document.getElementById("repairLimit").value || 0)
+      };
+    }
+
+    function addListItems(list, items, emptyText) {
+      list.innerHTML = "";
+      const values = items.length ? items : [emptyText];
+      values.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        list.appendChild(li);
+      });
+    }
+
+    function renderFinding(finding) {
+      const card = document.createElement("article");
+      card.className = "card finding";
+      const title = document.createElement("h3");
+      title.textContent = finding.check;
+      const meta = document.createElement("div");
+      meta.className = "finding-meta";
+      [finding.dateText, finding.unit ? `Unit ${finding.unit}` : "", money(finding.amount)].filter(Boolean).forEach((value, index) => {
+        const span = document.createElement("span");
+        if (index === 2 || value.startsWith("$")) span.className = "amount";
+        span.textContent = value;
+        meta.appendChild(span);
+      });
+      const found = document.createElement("p");
+      found.textContent = finding.found;
+      const question = document.createElement("p");
+      question.textContent = finding.question;
+      card.append(title, meta, found, question);
+      return card;
+    }
+
+    function renderAudit(result) {
+      totalHeadline.textContent = `${money(result.total)} to ask your property manager about`;
+      findingsList.innerHTML = "";
+      if (result.findings.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "card";
+        empty.textContent = "No questions were found from these checks.";
+        findingsList.appendChild(empty);
+      } else {
+        result.findings.forEach((finding) => findingsList.appendChild(renderFinding(finding)));
+      }
+      addListItems(passedList, result.passed, "No passing checks to show.");
+      addListItems(notesList, result.notes, "No notes.");
+      results.classList.remove("hidden");
+      results.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    sampleButton.addEventListener("click", () => {
+      textInput.value = sampleCsv;
+      fileInput.value = "";
+      textInput.focus();
+    });
+
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        textInput.value = String(reader.result || "");
+      };
+      reader.readAsText(file);
+    });
+
+    runButton.addEventListener("click", () => {
+      const result = audit(textInput.value, getTerms());
+      renderAudit(result);
+    });
+
+    printButton.addEventListener("click", () => window.print());
+
+    startOverButton.addEventListener("click", () => {
+      fileInput.value = "";
+      textInput.value = "";
+      findingsList.innerHTML = "";
+      results.classList.add("hidden");
+      document.getElementById("managementFee").value = "8";
+      document.getElementById("leasingFee").value = "50";
+      document.getElementById("repairLimit").value = "500";
+      document.getElementById("managementFee").focus();
+    });
+  </script>
+</body>
+</html>
