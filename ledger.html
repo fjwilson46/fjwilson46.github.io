@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">
+<title>Money Ledger Sample | Fred Wilson</title>
+<meta name="description" content="A sample money ledger for one fictional business. Three findings, each with its source records, its assumptions, and a plain label for what the number means. Runs in your browser. Nothing is saved or sent.">
+<style>
+  :root {
+    --bg: #f7f5f0; --surface: #ffffff; --ink: #16243a; --muted: #55627a;
+    --navy: #1f3a5f; --teal: #0f7c82; --gold: #b8862b; --line: #e2ddd2; --track: #ebe6dc;
+    --red: #b3362b; --yellow: #8a5d00; --green: #1d7a46;
+    --red-bg: #fbeceb; --yellow-bg: #fbf3df; --green-bg: #e8f4ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1826; --surface: #172436; --ink: #eef2f7; --muted: #a9b6c9;
+            --navy: #9cc0ea; --teal: #4fc3c9; --gold: #e0b35a; --line: #28384f; --track: #22334a;
+            --red: #ff8a7d; --yellow: #f0c060; --green: #5fd08f;
+            --red-bg: #3a1f22; --yellow-bg: #3a3120; --green-bg: #1b3326; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 17px/1.6 "Segoe UI", system-ui, -apple-system, Arial, sans-serif; }
+  a { color: var(--teal); }
+  :focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 20px 60px; }
+  header { padding: 40px 0 18px; }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 8px 0 10px; color: var(--navy); }
+  h2 { font-size: 22px; color: var(--navy); margin: 34px 0 10px; }
+  h3 { font-size: 18px; color: var(--navy); margin: 0 0 6px; }
+  .sub { color: var(--muted); margin: 0 0 8px; }
+  .demo { display: inline-block; background: var(--yellow-bg); color: var(--yellow); border-radius: 99px; padding: 2px 12px; font-weight: 700; font-size: 14px; }
+  label { font-weight: 600; }
+  input[type=number] { font: inherit; width: 8em; padding: 8px 10px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); }
+  button { padding: 10px 18px; border-radius: 8px; border: 0; background: var(--navy); color: var(--bg); font: 600 16px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--navy); border: 1.5px solid var(--navy); }
+  button[disabled] { opacity: .45; cursor: not-allowed; }
+  [hidden] { display: none !important; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 14px 0; }
+  .ledger { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 14px 0; }
+  .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .tile b { display: block; font-size: 26px; line-height: 1.25; color: var(--navy); }
+  .tile .what { font-weight: 600; }
+  .tile .meaning, .muted { color: var(--muted); font-size: 14.5px; }
+  .rule { background: var(--surface); border: 1px solid var(--line); border-left: 6px solid var(--gold); border-radius: 10px; padding: 12px 16px; }
+  .pill { display: inline-block; border-radius: 99px; padding: 1px 10px; font-weight: 700; font-size: 13px; white-space: nowrap; margin-right: 6px; }
+  .pill.observed { background: var(--green-bg); color: var(--green); }
+  .pill.estimated { background: var(--yellow-bg); color: var(--yellow); }
+  .pill.hypothesis { background: var(--red-bg); color: var(--red); }
+  .pill.money { background: var(--track); color: var(--navy); }
+  .amount { font-size: 24px; font-weight: 700; color: var(--navy); }
+  .amount.none { font-size: 18px; color: var(--muted); }
+  ul.plain { margin: 6px 0; padding-left: 20px; }
+  details { margin: 8px 0; }
+  summary { cursor: pointer; font-weight: 600; color: var(--teal); }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; margin-top: 8px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px; border-bottom: 1px solid var(--line); }
+  th { background: var(--navy); color: var(--bg); font-weight: 600; }
+  .exits { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .exits .card { margin: 0; }
+  textarea { width: 100%; min-height: 150px; padding: 12px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font: 14px/1.5 Consolas, "Courier New", monospace; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 10px 0; }
+  .err { color: var(--red); font-weight: 600; }
+  .note { color: var(--muted); font-size: 14.5px; margin-top: 26px; }
+  @media (max-width: 700px) {
+    table, tbody, tr, td { display: block; width: 100%; }
+    tr.head { display: none; }
+    tr { border-bottom: 1px solid var(--line); padding: 6px 0; }
+    td { border: 0; padding: 3px 4px; }
+    td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); font-size: 13px; }
+  }
+  @media print { body { background: #fff; color: #000; } .no-print { display: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="no-print"><a href="index.html">Back to Fred Wilson</a></p>
+  <header>
+    <span class="demo">Demo with a fictional business</span>
+    <h1>Money Ledger Sample</h1>
+    <p class="sub">Three findings from one made up company, Harbor Street Goods. Each number shows where it came from, what it assumes, and what it does not mean. It runs in your browser. Nothing is saved or sent anywhere.</p>
+  </header>
+
+  <div class="rule">
+    <b>How to read this page.</b> Money is kept in four separate lines: invoiced spend, estimated labor, potential exposure, and verified outcomes. The lines are never added together. A blank is shown as "Not estimated", never as zero. Time that could be freed up is not the same as cash saved.
+  </div>
+
+  <h2>The ledger</h2>
+  <div id="ledger" class="ledger" aria-live="polite"></div>
+  <p class="muted" id="overlap"></p>
+
+  <div class="card no-print">
+    <label for="rate">Loaded cost per labor hour, in dollars (an assumption you can change)</label>
+    <div class="row">
+      <input type="number" id="rate" min="1" max="1000" step="any" value="28" inputmode="decimal">
+      <span id="rateMsg" class="err" role="alert"></span>
+    </div>
+    <p class="muted">Change it and watch the estimated labor line move. The invoiced line does not move, because it comes from invoices.</p>
+  </div>
+
+  <h2>The findings</h2>
+  <div id="findings"></div>
+
+  <h2>What to do next</h2>
+  <p class="sub">Show the evidence first, then choose a path. Nothing is required before you see the findings.</p>
+  <div class="exits">
+    <div class="card">
+      <h3>1. Investigate it yourself</h3>
+      <p>Copy the findings with their source records and take them to your own team.</p>
+      <div class="row no-print"><button id="copyBtn" type="button">Copy the findings</button><button id="printBtn" type="button" class="ghost">Print</button></div>
+      <p class="muted" id="copyMsg" role="status"></p>
+    </div>
+    <div class="card">
+      <h3>2. Use a fix guide</h3>
+      <p>Each finding above has a short guide: the decision, the first action, who owns it, and the number to watch. Open "Fix guide" under any finding.</p>
+    </div>
+    <div class="card">
+      <h3>3. Ask Fred to lead the fix</h3>
+      <p>Choose which findings to share. You see the exact text before anything leaves this page, and nothing is sent unless you press send in your own email.</p>
+      <div id="shareList"></div>
+      <div class="row">
+        <input type="checkbox" id="consent"><label for="consent">I agree to share only the findings I ticked.</label>
+      </div>
+      <div class="row no-print"><button id="prepBtn" type="button" disabled>Prepare the message</button></div>
+      <textarea id="preview" readonly hidden aria-label="Exact text that would be shared"></textarea>
+      <p class="row no-print"><a id="mailLink" href="#" hidden>Open in my email app</a></p>
+      <p class="muted" id="prepMsg" role="status"></p>
+    </div>
+  </div>
+
+  <p class="note">This sample is built on made up records so you can see the method. The method is the same one used on a real business: separate what was observed from what was estimated, show the records, and say what the number means before asking anyone to act on it. Built by Fred Wilson.</p>
+</div>
+
+<script>
+// ENGINE START
+var MONEY_TYPES = [
+  { key: "invoiced", label: "Invoiced spend", meaning: "Money already billed. Taken from invoices." },
+  { key: "estimated", label: "Estimated labor", meaning: "Hours times a rate you can change. A cost estimate, not cash." },
+  { key: "exposure", label: "Potential exposure", meaning: "Money that may be at risk. Not a loss until it happens." },
+  { key: "verified", label: "Verified outcomes", meaning: "Results checked after a change, on the same basis as before." }
+];
+
+function makeSample(rate) {
+  var storageRows = [];
+  var months = ["2026-06-01", "2026-07-01", "2026-08-01", "2026-09-01", "2026-10-01", "2026-11-01"];
+  months.forEach(function (d, i) {
+    storageRows.push({ id: "INV-10" + (41 + i), date: d, text: "Overflow pallet storage, 12 pallets", amount: 1850 });
+  });
+  var reworkRows = [
+    { id: "HL-01", date: "2026-10-05", text: "Unloading line, recount after mislabel", hours: 6.5 },
+    { id: "HL-02", date: "2026-10-12", text: "Unloading line, double handling of mixed pallets", hours: 4.0 },
+    { id: "HL-03", date: "2026-10-19", text: "Unloading line, double handling of mixed pallets", hours: 5.5 },
+    { id: "HL-04", date: "2026-10-26", text: "Unloading line, recount after mislabel", hours: 3.0 },
+    { id: "HL-05", date: "2026-11-02", text: "Unloading line, double handling of mixed pallets", hours: 7.0 },
+    { id: "HL-06", date: "2026-11-09", text: "Unloading line, relabel and restack", hours: 4.5 },
+    { id: "HL-07", date: "2026-11-16", text: "Unloading line, double handling of mixed pallets", hours: 8.0 }
+  ];
+  var hours = reworkRows.reduce(function (s, r) { return s + r.hours; }, 0);
+  return [
+    {
+      id: "F1", area: "Retail and inventory",
+      title: "Storage is billed every month for overflow pallets",
+      claim: "The same storage charge appears on six monthly invoices. The invoices do not say which pallets are still needed.",
+      evidenceStatus: "observed", moneyType: "invoiced",
+      amount: storageRows.reduce(function (s, r) { return s + r.amount; }, 0),
+      window: "2026-06-01 to 2026-11-30",
+      assumptions: ["Every invoice in the window is included.", "Whether any pallet can be released has not been checked."],
+      confidence: "High that the charges recur. Not assessed: how many pallets are still needed.",
+      sources: storageRows.map(function (r) { return { id: r.id, cells: [r.date, r.text, "$" + r.amount.toLocaleString("en-US")] }; }),
+      sourceHead: ["Record", "Date", "Description", "Amount"],
+      firstQuestion: "Which of the 12 pallets match an open order today?",
+      decision: { what: "Keep, reduce, or end overflow storage", owner: "Operations manager", due: "2026-12-04", missing: "A pallet by pallet list matched to open orders", unblocks: "A new storage contract or a release notice" },
+      guide: { decision: "How many pallets to keep in overflow storage.", action: "Match each pallet to an open order and mark the rest as release candidates.", owner: "Operations manager", metric: "Monthly storage invoice total, compared with the same months after the change.", review: "2027-01-08" }
+    },
+    {
+      id: "F2", area: "Production and waste",
+      title: "Extra handling hours on the unloading line",
+      claim: "Seven weekly logs show extra hours spent recounting and handling mixed pallets twice.",
+      evidenceStatus: "estimated", moneyType: "estimated",
+      amount: Math.round(hours * rate * 100) / 100, hours: hours, rate: rate,
+      window: "2026-10-05 to 2026-11-22",
+      assumptions: ["Hours come from the line log, as recorded by the team.", "Cost = recorded extra hours times the loaded cost per labor hour you set above.", "Freed up hours are capacity, not cash saved."],
+      confidence: "Medium. Hours are self recorded. Not assessed: whether the log misses weeks.",
+      sources: reworkRows.map(function (r) { return { id: r.id, cells: [r.date, r.text, String(r.hours) + " hours"] }; }),
+      sourceHead: ["Record", "Date", "Description", "Extra hours"],
+      firstQuestion: "What do the mixed pallets have in common: supplier, label, or loading order?",
+      decision: { what: "Fix the cause of mixed pallets at receiving", owner: "Receiving lead", due: "2026-12-11", missing: "Cause of the mislabels and mixed pallets", unblocks: "A change to the receiving checklist" },
+      guide: { decision: "Whether to change how pallets are labeled and staged at receiving.", action: "Trace three mixed pallets back to the supplier and loading order.", owner: "Receiving lead", metric: "Extra handling hours per week, compared with the same weeks after the change.", review: "2027-01-15" }
+    },
+    {
+      id: "F3", area: "Projects and client work",
+      title: "A client project is stalled and a billing milestone sits behind it",
+      claim: "The project is marked blocked and has had no update for 41 days. A scope change is waiting on one approval. The records do not show the value of the milestone it holds.",
+      evidenceStatus: "observed", moneyType: "exposure", amount: null,
+      window: "2026-10-12 to 2026-11-22",
+      assumptions: ["The dependency is recorded by hand in this sample. The page does not find it on its own.", "A billing milestone is attached to this project. Its amount is not in the records."],
+      confidence: "High that the project is stalled. Not assessed: the milestone amount and invoice date.",
+      sources: [
+        { id: "PRJ-22", cells: ["2026-10-12", "Client portal move, status Blocked, last update 2026-10-12", "Owner: Delivery lead"] },
+        { id: "DEP-07", cells: ["2026-10-14", "Scope change needs client sponsor approval", "Approver: not recorded"] }
+      ],
+      sourceHead: ["Record", "Date", "Description", "Detail"],
+      firstQuestion: "What is the milestone amount, and when is it due to be invoiced?",
+      decision: { what: "Approve or drop the scope change", owner: null, due: "2026-11-30", missing: "Milestone amount and the approver's name", unblocks: "The client portal move and its billing milestone" },
+      guide: { decision: "Whether the scope change goes ahead.", action: "Ask the client sponsor for a yes or no by the due date.", owner: null, metric: "Days since the last project update, and the date the milestone is invoiced.", review: "2026-12-07" }
+    }
+  ];
+}
+
+function ownerText(o) { return o ? o : "Confirm with the sponsor"; }
+
+// Visible text never carries a dash. Dates read "June 1, 2026". Record ids read "INV 1041".
+var MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+function clean(s) {
+  return String(s)
+    .replace(/(\d{4})-(\d{2})-(\d{2})/g, function (m, y, mo, d) { return MONTH_NAMES[Number(mo) - 1] + " " + Number(d) + ", " + y; })
+    .replace(/\b([A-Z]{2,4})-(\d+)\b/g, "$1 $2");
+}
+
+function ledgerTotals(findings) {
+  // One line per money type. Known and unknown are kept apart. No cross type total exists.
+  var out = {};
+  MONEY_TYPES.forEach(function (t) { out[t.key] = { known: 0, knownCount: 0, unknownCount: 0, ids: [] }; });
+  findings.forEach(function (f) {
+    var line = out[f.moneyType];
+    if (!line) return;
+    line.ids.push(f.id);
+    if (f.amount === null || f.amount === undefined) line.unknownCount++;
+    else { line.known += f.amount; line.knownCount++; }
+  });
+  // If two findings in the same line cite the same record, a subtotal would count it twice. Withhold it.
+  var typeOf = {};
+  findings.forEach(function (f) { typeOf[f.id] = f.moneyType; });
+  overlapCheck(findings).forEach(function (k) {
+    var ids = k.split("+");
+    if (typeOf[ids[0]] === typeOf[ids[1]] && out[typeOf[ids[0]]]) out[typeOf[ids[0]]].withheld = true;
+  });
+  return out;
+}
+
+function overlapCheck(findings) {
+  // Two findings overlap when they cite the same source record id. Every pair is reported.
+  var bySource = {}, pairs = [];
+  findings.forEach(function (f) {
+    f.sources.forEach(function (s) {
+      bySource[s.id] = bySource[s.id] || [];
+      if (bySource[s.id].indexOf(f.id) < 0) bySource[s.id].push(f.id);
+    });
+  });
+  Object.keys(bySource).forEach(function (k) {
+    var ids = bySource[k];
+    for (var i = 0; i < ids.length; i++) for (var j = i + 1; j < ids.length; j++) {
+      var key = ids[i] + "+" + ids[j];
+      if (pairs.indexOf(key) < 0) pairs.push(key);
+    }
+  });
+  return pairs;
+}
+
+function shareText(findings, ids) {
+  var lines = ["Operations diagnostic sample, shared by choice.", "Fictional business: Harbor Street Goods.", ""];
+  findings.filter(function (f) { return ids.indexOf(f.id) >= 0; }).forEach(function (f) {
+    lines.push(f.id + ". " + f.title);
+    lines.push("Evidence: " + f.evidenceStatus + ". Money type: " + f.moneyType + ". Window: " + f.window + ".");
+    lines.push("Amount: " + (f.amount === null ? "Not estimated" : money(f.amount)));
+    lines.push("Assumptions: " + f.assumptions.join(" "));
+    lines.push("Decision: " + f.decision.what + ". Who decides: " + ownerText(f.decision.owner) + ". Due: " + f.decision.due + ".");
+    lines.push("");
+  });
+  return clean(lines.join("\n"));
+}
+
+function money(v) { return "$" + (Math.round(v * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+// ENGINE END
+
+var state = { rate: 28 };
+function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = clean(text); return e; }
+
+function render() {
+  var openKeys = {};
+  Array.prototype.forEach.call(document.querySelectorAll("#findings details[open]"), function (d) { openKeys[d.getAttribute("data-key")] = true; });
+  var findings = makeSample(state.rate);
+  var totals = ledgerTotals(findings);
+  var ledger = document.getElementById("ledger");
+  ledger.textContent = "";
+  MONEY_TYPES.forEach(function (t) {
+    var line = totals[t.key], tile = el("div", "tile");
+    tile.appendChild(el("span", "what", t.label));
+    var big;
+    if (line.withheld) big = "Subtotal withheld";
+    else if (line.knownCount === 0 && line.unknownCount === 0) big = "None recorded yet";
+    else if (line.knownCount === 0) big = "Not estimated";
+    else big = money(line.known);
+    tile.appendChild(el("b", "", big));
+    var note = t.meaning;
+    if (line.withheld) note += " Two findings in this line cite the same record, so a total could count it twice.";
+    else if (line.knownCount > 0 && line.unknownCount > 0) note += " Known lines only. " + line.unknownCount + " not estimated.";
+    if (line.ids.length) note += " From " + line.ids.join(", ") + ".";
+    tile.appendChild(el("span", "meaning", note));
+    ledger.appendChild(tile);
+  });
+  var pairs = overlapCheck(findings);
+  document.getElementById("overlap").textContent = pairs.length
+    ? "Overlap check: " + pairs.join(", ") + " cite the same records. Do not combine those lines."
+    : "Overlap check: no two findings cite the same source record. The four lines still are not added together, because they mean different things.";
+
+  var host = document.getElementById("findings");
+  host.textContent = "";
+  findings.forEach(function (f) {
+    var c = el("div", "card");
+    var tags = el("div", "");
+    tags.appendChild(el("span", "pill " + f.evidenceStatus, f.evidenceStatus.charAt(0).toUpperCase() + f.evidenceStatus.slice(1)));
+    tags.appendChild(el("span", "pill money", MONEY_TYPES.filter(function (t) { return t.key === f.moneyType; })[0].label));
+    tags.appendChild(el("span", "muted", f.area + " | " + f.window));
+    c.appendChild(tags);
+    c.appendChild(el("h3", "", f.id + ". " + f.title));
+    c.appendChild(el("p", "", f.claim));
+    c.appendChild(el("div", f.amount === null ? "amount none" : "amount", f.amount === null ? "Not estimated" : money(f.amount)));
+    if (f.id === "F2") c.appendChild(el("p", "muted", f.hours + " recorded hours times " + money(f.rate) + " per hour. Freed up hours are capacity, not cash saved."));
+    var a = el("p", "muted", "Assumptions"); a.style.margin = "10px 0 0"; c.appendChild(a);
+    var ul = el("ul", "plain"); f.assumptions.forEach(function (x) { ul.appendChild(el("li", "", x)); }); c.appendChild(ul);
+    c.appendChild(el("p", "muted", "Confidence: " + f.confidence));
+    c.appendChild(el("p", "", "First question to ask: " + f.firstQuestion));
+
+    var d1 = el("details"); d1.setAttribute("data-key", f.id + "s"); d1.open = !!openKeys[f.id + "s"]; d1.appendChild(el("summary", "", "Source records (" + f.sources.length + ")"));
+    var tb = el("table"); var hr = el("tr", "head"); f.sourceHead.forEach(function (h) { hr.appendChild(el("th", "", h)); }); tb.appendChild(hr);
+    var labels = f.sourceHead;
+    f.sources.forEach(function (s) {
+      var tr = el("tr"); var idc = el("td", "", s.id); idc.setAttribute("data-label", labels[0]); tr.appendChild(idc);
+      s.cells.forEach(function (cell, i) { var td = el("td", "", cell); td.setAttribute("data-label", labels[i + 1]); tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+    d1.appendChild(tb); c.appendChild(d1);
+
+    var d2 = el("details"); d2.setAttribute("data-key", f.id + "d"); d2.open = !!openKeys[f.id + "d"]; d2.appendChild(el("summary", "", "Decision record"));
+    var dl = el("ul", "plain");
+    [["What must be decided", f.decision.what], ["Who can decide", ownerText(f.decision.owner)], ["Decide by", f.decision.due], ["Evidence still missing", f.decision.missing], ["Work it releases", f.decision.unblocks]]
+      .forEach(function (p) { dl.appendChild(el("li", "", p[0] + ": " + p[1])); });
+    d2.appendChild(dl); c.appendChild(d2);
+
+    var d3 = el("details"); d3.setAttribute("data-key", f.id + "g"); d3.open = !!openKeys[f.id + "g"]; d3.appendChild(el("summary", "", "Fix guide"));
+    var gl = el("ul", "plain");
+    [["Decision", f.guide.decision], ["First action", f.guide.action], ["Owner", ownerText(f.guide.owner)], ["Number to watch", f.guide.metric], ["Review on", f.guide.review]]
+      .forEach(function (p) { gl.appendChild(el("li", "", p[0] + ": " + p[1])); });
+    d3.appendChild(gl); c.appendChild(d3);
+    host.appendChild(c);
+  });
+
+  var share = document.getElementById("shareList");
+  if (!share.children.length) {
+    findings.forEach(function (f) {
+      var r = el("div", "row"); var cb = document.createElement("input"); cb.type = "checkbox"; cb.id = "share_" + f.id; cb.value = f.id;
+      var lb = el("label", "", f.id + ". " + f.title); lb.setAttribute("for", cb.id); lb.style.fontWeight = "400";
+      r.appendChild(cb); r.appendChild(lb); share.appendChild(r);
+    });
+  }
+}
+
+function pickedIds() {
+  return Array.prototype.slice.call(document.querySelectorAll("#shareList input:checked")).map(function (c) { return c.value; });
+}
+function syncPrep() {
+  document.getElementById("prepMsg").textContent = "";
+  document.getElementById("prepBtn").disabled = !(document.getElementById("consent").checked && pickedIds().length > 0);
+  document.getElementById("preview").hidden = true;
+  document.getElementById("mailLink").hidden = true;
+}
+
+document.getElementById("rate").addEventListener("input", function (e) {
+  var v = Number(e.target.value), msg = document.getElementById("rateMsg");
+  if (e.target.value === "" || !isFinite(v) || v < 1 || v > 1000) { msg.textContent = "Enter a number from 1 to 1000. Decimals are fine."; return; }
+  msg.textContent = ""; state.rate = v; render();
+  var hadPreview = !document.getElementById("preview").hidden;
+  syncPrep();
+  if (hadPreview) document.getElementById("prepMsg").textContent = "The rate changed, so the earlier message was cleared. Press Prepare the message again.";
+});
+document.getElementById("consent").addEventListener("change", syncPrep);
+document.getElementById("shareList").addEventListener("change", syncPrep);
+document.getElementById("prepBtn").addEventListener("click", function () {
+  var text = shareText(makeSample(state.rate), pickedIds());
+  var box = document.getElementById("preview"); box.value = text; box.hidden = false;
+  var link = document.getElementById("mailLink");
+  link.href = "mailto:fjwilson46@gmail.com?subject=" + encodeURIComponent("Operations Diagnostic sample") + "&body=" + encodeURIComponent(text);
+  link.hidden = false;
+});
+document.getElementById("printBtn").addEventListener("click", function () { window.print(); });
+document.getElementById("copyBtn").addEventListener("click", function () {
+  var f = makeSample(state.rate), text = shareText(f, f.map(function (x) { return x.id; }));
+  var msg = document.getElementById("copyMsg");
+  function done(ok) { msg.textContent = ok ? "Copied." : "Copy was blocked. Select the text in the box under the third path instead."; }
+  try { navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); }); } catch (e) { done(false); }
+});
+render();
+</script>
+</body>
+</html>
