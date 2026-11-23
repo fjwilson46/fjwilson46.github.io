@@ -302,6 +302,7 @@
       <div class="card">
         <div id="totalHeadline" class="headline"></div>
         <p>Each item below is a question to ask, not proof of a mistake. Managers often have a good reason.</p>
+        <p id="overlapNote" class="hidden"></p>
       </div>
 
       <div id="findingsList"></div>
@@ -516,7 +517,7 @@
       return usual;
     }
 
-    function makeFinding(check, row, amount, found, question) {
+    function makeFinding(check, row, amount, found, question, rowIdxs = []) {
       return {
         check,
         date: row.dateKey,
@@ -527,8 +528,36 @@
         found,
         amount: cents(amount) / 100,
         question,
-        sort: row.date.getTime()
+        sort: row.date.getTime(),
+        rows: rowIdxs
       };
+    }
+
+    // Two checks can flag the same charge. Each charge is counted once, at the larger amount.
+    function countOnce(findings) {
+      const parent = findings.map((_, i) => i);
+      const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+      const owner = new Map();
+      findings.forEach((finding, i) => {
+        finding.rows.forEach((rowIndex) => {
+          if (owner.has(rowIndex)) parent[find(i)] = find(owner.get(rowIndex));
+          else owner.set(rowIndex, i);
+        });
+      });
+      const groups = new Map();
+      findings.forEach((finding, i) => {
+        const g = find(i);
+        if (!groups.has(g)) groups.set(g, []);
+        groups.get(g).push(finding);
+      });
+      let totalCents = 0;
+      const overlaps = [];
+      groups.forEach((list) => {
+        const top = Math.max(...list.map((finding) => cents(finding.amount)));
+        totalCents += top;
+        if (list.length > 1) overlaps.push({ checks: list.map((finding) => finding.check), counted: top / 100 });
+      });
+      return { total: totalCents / 100, overlaps };
     }
 
     function audit(csvText, terms) {
@@ -538,7 +567,8 @@
       const findings = [];
       const passed = [];
       const { rows, notes } = readRows(csvText);
-      if (rows.length === 0) return { total: 0, findings: [], passed: [], notes };
+      if (rows.length === 0) return { total: 0, findings: [], passed: [], notes, overlaps: [] };
+      rows.forEach((row, i) => { row.idx = i; });
 
       const firstDate = rows[0].date;
       const lastDate = rows[rows.length - 1].date;
@@ -568,7 +598,8 @@
             feeRow,
             difference,
             `Management fees were ${money(difference)} over the agreement for ${monthLabel(feeRow.month)}.`,
-            `Our agreement says ${managementPercent}% of rent collected, which is ${money(expected)} for ${monthLabel(feeRow.month)}. The statement shows ${money(actual)}. Can you explain the ${money(difference)} difference?`
+            `Our agreement says ${managementPercent}% of rent collected, which is ${money(expected)} for ${monthLabel(feeRow.month)}. The statement shows ${money(actual)}. Can you explain the ${money(difference)} difference?`,
+            feeRows.map((row) => row.idx)
           ));
         } else {
           matchedManagementMonths.push(monthLabel(feeRow.month));
@@ -591,7 +622,8 @@
               second,
               second.amount,
               `${money(second.amount)} appears twice for ${second.description}.`,
-              `I see two charges of ${money(second.amount)} for ${second.description}, on ${dateLabel(first.date)} and ${dateLabel(second.date)}. Was this one job billed twice, or two separate visits?`
+              `I see two charges of ${money(second.amount)} for ${second.description}, on ${dateLabel(first.date)} and ${dateLabel(second.date)}. Was this one job billed twice, or two separate visits?`,
+              [second.idx]
             ));
           }
         }
@@ -607,7 +639,8 @@
             row,
             row.amount,
             `${money(row.amount)} was over the repair approval limit.`,
-            `The charge of ${money(row.amount)} for ${row.description} is over our ${money(repairLimit)} approval limit. Can you send the invoice and show when I approved it?`
+            `The charge of ${money(row.amount)} for ${row.description} is over our ${money(repairLimit)} approval limit. Can you send the invoice and show when I approved it?`,
+            [row.idx]
           ));
         }
       });
@@ -630,7 +663,8 @@
             row,
             difference,
             `The leasing fee was ${money(difference)} over the agreement for Unit ${row.unit}.`,
-            `Our agreement sets the leasing fee at ${leasingPercent}% of one month's rent, which is ${money(allowed)} for Unit ${row.unit}. The statement shows ${money(row.amount)}. Can you explain the ${money(difference)} difference?`
+            `Our agreement sets the leasing fee at ${leasingPercent}% of one month's rent, which is ${money(allowed)} for Unit ${row.unit}. The statement shows ${money(row.amount)}. Can you explain the ${money(difference)} difference?`,
+            [row.idx]
           ));
         }
       });
@@ -659,8 +693,8 @@
       }
 
       findings.sort((a, b) => a.sort - b.sort || a.check.localeCompare(b.check));
-      const total = cents(findings.reduce((sum, finding) => sum + finding.amount, 0)) / 100;
-      return { total, findings, passed, notes };
+      const { total, overlaps } = countOnce(findings);
+      return { total, findings, passed, notes, overlaps };
     }
     // ENGINE END
 
@@ -736,6 +770,16 @@
 
     function renderAudit(result) {
       totalHeadline.textContent = `${money(result.total)} to ask your property manager about`;
+      const overlapNote = document.getElementById("overlapNote");
+      if (result.overlaps && result.overlaps.length > 0) {
+        overlapNote.textContent = result.overlaps.length === 1
+          ? "Two checks flagged the same charge. It is counted once in this total, at the larger amount."
+          : result.overlaps.length + " charges were flagged by more than one check. Each is counted once in this total, at the larger amount.";
+        overlapNote.classList.remove("hidden");
+      } else {
+        overlapNote.textContent = "";
+        overlapNote.classList.add("hidden");
+      }
       findingsList.innerHTML = "";
       if (result.findings.length === 0) {
         const empty = document.createElement("div");
