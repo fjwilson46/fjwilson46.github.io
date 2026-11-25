@@ -517,7 +517,7 @@
       return usual;
     }
 
-    function makeFinding(check, row, amount, found, question, rowIdxs = []) {
+    function makeFinding(check, row, amount, found, question, rowIdxs = [], aggregate = false) {
       return {
         check,
         date: row.dateKey,
@@ -529,11 +529,15 @@
         amount: cents(amount) / 100,
         question,
         sort: row.date.getTime(),
-        rows: rowIdxs
+        rows: rowIdxs,
+        aggregate
       };
     }
 
-    // Two checks can flag the same charge. Each charge is counted once, at the larger amount.
+    // A charge can be flagged by more than one check. Each charge is counted once.
+    // Row level findings (duplicate, repair over limit, leasing fee) count once per statement row, at the larger amount.
+    // A monthly aggregate finding (management fee over the agreement) covers several rows, so within a group the total is
+    // whichever is larger: the row level amounts added up, or the aggregate amount.
     function countOnce(findings) {
       const parent = findings.map((_, i) => i);
       const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
@@ -553,9 +557,20 @@
       let totalCents = 0;
       const overlaps = [];
       groups.forEach((list) => {
-        const top = Math.max(...list.map((finding) => cents(finding.amount)));
-        totalCents += top;
-        if (list.length > 1) overlaps.push({ checks: list.map((finding) => finding.check), counted: top / 100 });
+        const rowTop = new Map();
+        let aggregateTop = 0;
+        let rowless = 0;
+        list.forEach((finding) => {
+          const amountCents = cents(finding.amount);
+          if (finding.aggregate) aggregateTop = Math.max(aggregateTop, amountCents);
+          else if (finding.rows.length === 0) rowless += amountCents;
+          else finding.rows.forEach((rowIndex) => rowTop.set(rowIndex, Math.max(rowTop.get(rowIndex) || 0, amountCents)));
+        });
+        let rowSum = 0;
+        rowTop.forEach((value) => { rowSum += value; });
+        const counted = Math.max(rowSum, aggregateTop) + rowless;
+        totalCents += counted;
+        if (list.length > 1) overlaps.push({ checks: list.map((finding) => finding.check), counted: counted / 100 });
       });
       return { total: totalCents / 100, overlaps };
     }
@@ -599,7 +614,8 @@
             difference,
             `Management fees were ${money(difference)} over the agreement for ${monthLabel(feeRow.month)}.`,
             `Our agreement says ${managementPercent}% of rent collected, which is ${money(expected)} for ${monthLabel(feeRow.month)}. The statement shows ${money(actual)}. Can you explain the ${money(difference)} difference?`,
-            feeRows.map((row) => row.idx)
+            feeRows.map((row) => row.idx),
+            true
           ));
         } else {
           matchedManagementMonths.push(monthLabel(feeRow.month));
@@ -772,9 +788,7 @@
       totalHeadline.textContent = `${money(result.total)} to ask your property manager about`;
       const overlapNote = document.getElementById("overlapNote");
       if (result.overlaps && result.overlaps.length > 0) {
-        overlapNote.textContent = result.overlaps.length === 1
-          ? "Two checks flagged the same charge. It is counted once in this total, at the larger amount."
-          : result.overlaps.length + " charges were flagged by more than one check. Each is counted once in this total, at the larger amount.";
+        overlapNote.textContent = "Some findings cover the same charges. The total adjusts for that overlap.";
         overlapNote.classList.remove("hidden");
       } else {
         overlapNote.textContent = "";
